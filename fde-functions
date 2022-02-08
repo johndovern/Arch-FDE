@@ -152,7 +152,7 @@ function configure_grub_and_hooks() {
     export CRYPTKEYGRUB=""
   fi
   send_prog "Adding ${DEV}${CRYPTPARTITION} uuid to /etc/default/grub"
-  sed -i -e "/GRUB_CMDLINE_LINUX=/c GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$(lsblk -dno UUID ${DEV}${CRYPTPARTITION}):${CRYPTNAME}${SSDGRUB}${CRYPTKEYGRUB}\"" ${TARGETMOUNTPOINT}/etc/default/grub
+  sed -i -e "/GRUB_CMDLINE_LINUX=/c GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$(lsblk -dno UUID ${DEV}${CRYPTPARTITION}):${CRYPTNAME}${SSDGRUB} root=/dev/mapper/${VGNAME}-${LVROOTNAME}${CRYPTKEYGRUB}\"" "${TARGETMOUNTPOINT}/etc/default/grub"
   send_prog "Adding required hooks and modules to /etc/mkinitcpio.conf"
   sed -i -e '/^HOOKS=/c HOOKS=(base udev autodetect keyboard keymap modconf block encrypt lvm2 filesystems fsck)' -e "/^MODULES/c MODULES=($(lsblk -dno FSTYPE ${KEYDEV}))" ${TARGETMOUNTPOINT}/etc/mkinitcpio.conf
 }

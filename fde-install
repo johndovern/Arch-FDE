@@ -90,7 +90,12 @@ https://github.com/johndovern/FDE-Arch"
     close_and_unmount
   fi
 
-  echo -e "${GREEN}Encrypted install completed successfully. Enjoy your new system! ${END}"
+  if ! chroot_install ; then
+    send_error "Failed to chroot and install system"
+    close_and_unmount
+  fi
+
+  echo -e "${GREEN}Encrypted install completed successfully. Enjoy your new system!${END}"
 
 }
 
