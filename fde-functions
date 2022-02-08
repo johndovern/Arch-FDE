@@ -42,7 +42,7 @@ function encrypt_dev() {
   done
   send_prog "Initializing ${DEV}${CRYPTPARTITION} as crypt partition"
   printf %s "${PASSPHRASE}" | cryptsetup luksFormat --iter-time "${ITERTIME}" --key-file - --batch-mode "${DEV}${CRYPTPARTITION}"
-  send_prog "Opening crypt partition ${DEV}${CRYPTPARITION} as ${CRYPTNAME}"
+  send_prog "Opening crypt partition ${DEV}${CRYPTPARTITION} as ${CRYPTNAME}"
   printf %s "${PASSPHRASE}" | cryptsetup open -d - "${DEV}${CRYPTPARTITION}" "${CRYPTNAME}"
   send_prog "Creating physical volume on ${CRYPTNAME}"
   if ! pvcreate /dev/mapper/${CRYPTNAME} ; then return 1 ; fi
