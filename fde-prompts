@@ -62,8 +62,8 @@ Cannot contain a \"${RED}-${END}\""
     clear
     echo -e "${GREEN}\
 Would you like to create a seprate logical volume for home?${END}
-0  :  Do not create a seperate LV
-1  :  Create a seperate LV"
+0  :  Do not create a seperate LV for home
+1  :  Create a seperate LV for home"
     read -rp "Create LV for home? " WANTSHOME
     export WANTSHOME
   done
@@ -417,7 +417,7 @@ function confirm_install() {
   while : ; do
     clear
     echo -e "${RED}\
-*****  INSTALLTION CONFIRMATION  *****${END}
+*****    INSTALLTION CONFIRMATION    *****${END}
 ${DEV} is about to be wiped clean and
 a new Arch Linux system will be installed"
     read -rp "Please enter YES to continue: " ans
