@@ -142,6 +142,10 @@ function enable_multilib() {
     send_prog "Enabling multilib repository"
     cp ${TARGETMOUNTPOINT}/etc/pacman.conf ${TARGETMOUNTPOINT}/etc/pacman.conf.backup
     sed -i -e 's/\#\[multilib\]/\[multilib\]/' -e '/^\[multilib\]/,+1 s/\#//' ${TARGETMOUNTPOINT}/etc/pacman.conf
+    return 0
+  else
+    send_prog "Multilib will not be enabled"
+    return 0
   fi
 }
 
