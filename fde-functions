@@ -67,7 +67,7 @@ function luks_add_keyfile() {
   else
     send_prog "${KEYDIR} already exists on ${KEYDEV} checking for keyfile"
   fi
-  if [[ ! -e "${KEYMOUNT}"/"${KEYPATH}" ]]
+  if [[ ! -e "${KEYMOUNT}"/"${KEYPATH}" ]]; then
     send_prog "Creating keyfile ${KEYNAME} on ${KEYDEV}"
     if ! dd bs=512 count=4 if=/dev/urandom of="${KEYMOUNT}/${KEYPATH}" iflag=fullblock ; then
       send_error "Creating keyfile  :  ${KEYNAME}"
