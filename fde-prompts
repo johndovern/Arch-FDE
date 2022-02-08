@@ -233,7 +233,7 @@ Would you like to use a keyfile on an external drive to unlock LUKS at boot?${EN
   if [[ "$WANTKEY" -eq 0 ]]; then export KEYCHANGE=0 ; return 1 ; fi
 
   # KEYDEV prompt
-  while [[ ! -e "${KEYDEV}" ]] || [[ -z "${KEYDEV}" ]] || echo "${KEYDEV}" | grep -q "${DEV}" || echo "${KEYDEV}" | grep -q -E "*[0-9]+$" ; do
+  while [[ ! -e "${KEYDEV}" ]] || [[ -z "${KEYDEV}" ]] || echo "${KEYDEV}" | grep -q "${DEV}" || ! echo "${KEYDEV}" | grep -q -E "*[0-9]+$" ; do
     clear
     lsblk
     echo -e "${GREEN}\
