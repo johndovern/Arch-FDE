@@ -5,6 +5,7 @@ export CRYPTNAME=""
 export VGNAME=""
 export LVROOTNAME=""
 export LVROOTSIZE=""
+export WANTSHOME=
 export LVHOMENAME=""
 export LVHOMESIZE=""
 export LVSWAPNAME=""

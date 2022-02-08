@@ -1,7 +1,5 @@
 #!/bin/bash -u
 
-# add -h for installation with a LV for home
-
 export FDECONFIG="fde-config"
 export BLANKCONFIG="fde-blank"
 source "${BLANKCONFIG}"
@@ -29,6 +27,8 @@ https://github.com/johndovern/FDE-Arch"
     system_var_check
   done
 
+  if [[ ! -d "$TARGETMOUNTPOINT" ]]; then send_prog "Making direcotry ${TARGETMOUNTPOINT}" ; mkdir -p "${TARGETMOUNTPOINT}" ; fi
+
   while [[ -z "${KEYCHANGE}" ]] || [[ "${KEYCHANGE}" -eq 1 ]]; do
     export KEYCHANGE=
     if ! key_prompts ; then
@@ -45,7 +45,7 @@ https://github.com/johndovern/FDE-Arch"
     fi
   done
 
-  return 0
+  if [[ ! -d "$KEYMOUNT" ]] && [[ "${WANTKEY}" -eq 1 ]] ; then send_prog "Making direcotry ${KEYMOUNT}" ; mkdir -p "${KEYMOUNT}" ; fi
 
   if ! format_dev ; then
     send_error "Unable to format ${DEV}"
@@ -62,7 +62,6 @@ https://github.com/johndovern/FDE-Arch"
   if [[ "${WANTKEY}" -eq 1 ]]; then
     if ! luks_add_keyfile ; then
       send_error "Failed to add a keyfile to ${DEV}${CRYPTPARTITION}"
-      remove_key
       close_and_unmount
       return 1
     fi
@@ -99,7 +98,7 @@ function remove_key() {
   if ! mount "${KEYDEV}" "${KEYMOUNT}" ; then
     send_error "Failed to mount ${KEYDEV} at ${KEYMOUNT}"
   fi
-  if ! rm -f -- "${KEYMOUNT}""${KEYPATH}" ; then
+  if ! rm -f -- "${KEYMOUNT}"/"${KEYPATH}" ; then
     send_error "Failed to remove keyfile at ${KEYMOUNT}${KEYPATH}"
   fi
   if ! umount "${KEYMOUNT}" ; then return 1 ; fi
@@ -127,6 +126,9 @@ Options:
                     working directory. Any var not set or set improperly
                     will result in the user being queried for said var.
 
+ --home             A logical volume for /home will be created during
+                    the installation process.
+
  -h, --help         Show this help message and exit. -h and -c are
                     mutually exclusive.
 EOF
@@ -136,6 +138,7 @@ while : ; do
   if [[ $# -ge 1 ]]; then
     case $1 in
       -h | --help) usage ; break ;;
+      --home) export WANTSHOME=1 ; shift ;;
       -c) shift
           if [[ $# -ge 1 ]] && [[ "$1" != -* ]]; then
             FDECONFIG="$1"
@@ -148,7 +151,11 @@ while : ; do
               exit 1
             fi
           elif [[ $# -ge 1 ]] && [[ "$1" == -* ]]; then
-            continue
+            if [[ -e "${FDECONFIG}" ]]; then
+              source "${FDECONFIG}"
+              export CONFIGUSED=1
+              continue
+            fi
           else
             if [[ -e "${FDECONFIG}" ]]; then
               source "${FDECONFIG}"

@@ -57,6 +57,16 @@ Cannot contain a \"${RED}-${END}\""
     export VGNAME
   done
 
+  # WANTSHOME prompt
+  while [[ -z "${WANTSHOME}" ]] || [[ ! "${WANTSHOME}" =~ ^[0-1]$ ]] ; do
+    echo -e "${GREEN}\
+Would you like to create a seprate logical volume for home?${END}
+0  :  Do not create a seperate LV
+1  :  Create a seperate LV"
+    read -rp "Create LV for home? " WANTSHOME
+    export WANTSHOME
+  done
+
   # LVROOTNAME prompt
   while [[ -z "$LVROOTNAME" ]] || echo "${LVROOTNAME}" | grep -q "-" -i ; do
     clear
@@ -146,8 +156,6 @@ If the directory does not exist, it will be created"
     export TARGETMOUNTPOINT
   done
 
-  # if [[ ! -d "$TARGETMOUNTPOINT" ]]; then mkdir -p "${TARGETMOUNTPOINT}" ; fi
-
   # NEWHOSTNAME prompt
   while [[ -z "$NEWHOSTNAME" ]] ; do
     clear
@@ -176,6 +184,17 @@ Enter something sane, there are no major checks for this"
       read -sr ROOTPASS_C
       export ROOTPASS_C
     done
+  done
+
+  # MULTILIB prompt
+  while [[ -z "$MULTILIB" ]] || [[ ! "$MULTILIB" =~ ^[0-1]$ ]] ; do
+    clear
+    echo -e "${GREEN}\
+Would you like to enable the multilib repository?${END}
+0  :  Do not enable the multilib repo
+1  :  Enable the multilib repo"
+    read -rp "Enable multilib? " MULTILIB
+    export MULTILIB
   done
 
   # SSDGRUB prompt
@@ -253,11 +272,11 @@ Would you like to reformat to another filesystem?
     fi
 
   # KEYNAME prompt
-    while [[ -z "$KEYNAME" ]] || echo "${KEYNAME}" | grep -q "\.key" ; do
+    while [[ -z "${UKEYNAME}" ]] || echo "${UKEYNAME}" | grep -q "\.key" || [[ -z "${KEYNAME}" ]]; do
       clear
       echo -e "${GREEN}Please enter a reasonable name for your keyfile${END}\nDo not include the \"${RED}.key${END}\" extension in the name."
-      read -rp "Keyname: " KEYNAME
-      export KEYNAME
+      read -rp "Keyname: " UKEYNAME
+      export KEYNAME="${UKEYNAME}.key"
     done
 
   # KEYMOUNT prompt

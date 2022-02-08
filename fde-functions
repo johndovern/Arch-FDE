@@ -17,16 +17,9 @@ function format_dev() {
       sgdisk --new="${CRYPTPARTITION}":0:0    --change-name="${CRYPTPARTITION}":"Linux LUKS" --typecode="${CRYPTPARTITION}":8309 "${DEV}"
       if is_error ; then return 1 ; fi
       sgdisk --print "${DEV}"
-    # MBR
-    elif [[ "${ISEFI}" -eq 0 ]] ; then
-      send_prog "Erasing partitiontable of ${DEV}"
-      dd if=/dev/zero of="${DEV}" bs=512 count=1
-      if is_error ; then return 1 ; fi
-      send_prog "Creating a Linux partition on ${DEV} with MBR"
-      sfdisk "${DEV}" <<- HEREDOC
-2M,,L
-HEREDOC
-      if is_error ; then return 1 ; fi
+    else
+      send_error "MBR is not supported at this time"
+      return 1
     fi
   fi
 }
@@ -59,19 +52,30 @@ function encrypt_dev() {
   if ! lvcreate -n ${LVROOTNAME} -L ${ROOTSIZE} ${VGNAME} ; then return 1 ; fi
   send_prog "Creating swap logical volume ${LVSWAPNAME}"
   if ! lvcreate -n ${LVSWAPNAME} -L ${SWAPSIZE} ${VGNAME} ; then return 1 ; fi
-  send_prog "Creating home logical volume ${LVHOMENAME}"
-  if ! lvcreate -n ${LVHOMENAME} -l ${HOMESIZE} ${VGNAME} ; then return 1 ; fi
+  if [[ "${WANTSHOME}" -eq 1 ]]; then
+    send_prog "Creating home logical volume ${LVHOMENAME}"
+    if ! lvcreate -n ${LVHOMENAME} -l ${HOMESIZE} ${VGNAME} ; then return 1 ; fi
+  fi
 }
 
 function luks_add_keyfile() {
   send_prog "Mounting ${KEYDEV} at ${KEYMOUNT}"
   if ! mount "${KEYDEV}" "${KEYMOUNT}" ; then send_error "Mounting ${KEYDEV} at ${KEYMOUNT}" ; return 1 ; fi
-  if [ ! -d "${KEYMOUNT}"/keys ]; then
-    send_prog "Creating keys folder on ${KEYDEV}"
-    mkdir -p "${KEYMOUNT}"/keys
+  if [[ ! -d "${KEYMOUNT}"/"${KEYDIR}" ]]; then
+    send_prog "Creating directory ${KEYDIR} on ${KEYDEV}"
+    mkdir -p "${KEYMOUNT}"/"${KEYDIR}"
+  else
+    send_prog "${KEYDIR} already exists on ${KEYDEV} checking for keyfile"
   fi
-  send_prog "Creating keyfile ${KEYNAME} on ${KEYDEV}"
-  if ! dd bs=512 count=4 if=/dev/urandom of="${KEYMOUNT}/keys/${KEYNAME}" iflag=fullblock ; then send_error "Mounting ${KEYDEV} at ${KEYMOUNT}" ; return 1 ; fi
+  if [[ ! -e "${KEYMOUNT}"/"${KEYPATH}" ]]
+    send_prog "Creating keyfile ${KEYNAME} on ${KEYDEV}"
+    if ! dd bs=512 count=4 if=/dev/urandom of="${KEYMOUNT}/${KEYPATH}" iflag=fullblock ; then
+      send_error "Creating keyfile  :  ${KEYNAME}"
+      return 1
+    fi
+  else
+    send_prog "${KEYNAME} already exists, skipping"
+  fi
   if ! chmod u=rx,go-rwx "${KEYMOUNT}"/"${KEYDIR}" ; then send_error "Chmoding ${KEYMOUNT}/${KEYDIR}" ; return 1 ; fi
   if ! chmod u=r,go-rwx "${KEYMOUNT}""${KEYPATH}" ; then send_error "Chmoding ${KEYMOUNT}/${KEYPATH}" ; return 1 ; fi
   send_prog "Adding keyfile, ${KEYNAME}, to ${DEV}${CRYPTPARTITION}"
@@ -83,32 +87,44 @@ function luks_add_keyfile() {
 function make_filesystem() {
   send_prog "Creating root filesystem"
   if ! mkfs.ext4 -L root /dev/${VGNAME}/${LVROOTNAME} ; then send_error "Making root filesystem" ; return 1 ; fi
-  send_prog "Creating home filesystem"
-  if ! mkfs.ext4 -L home /dev/${VGNAME}/${LVHOMENAME} ; then send_error "Making home filesystem" ; return 1 ; fi
   send_prog "Creating swap"
   if ! mkswap -L swap /dev/${VGNAME}/${LVSWAPNAME} ; then send_error "Creating swap" ; return 1 ; fi
+  if [[ "${WANTSHOME}" -eq 1 ]]; then
+    send_prog "Creating home filesystem"
+    if ! mkfs.ext4 -L home /dev/${VGNAME}/${LVHOMENAME} ; then send_error "Making home filesystem" ; return 1 ; fi
+  fi
 }
 
 function reformat_key() {
   if [[ "${KEYFORMAT}" -eq 1 ]]; then
-    if ! mkfs.vfat -F 32 -n "boot-key" "${KEYDEV}" ; then
+    send_prog "Reformating ${KEYDEV}"
+    if ! mkfs.vfat -F 32 -n "BOOT_KEY" "${KEYDEV}" ; then
       send_error "Reformatting ${KEYDEV}" ; return 1
     fi
   elif [[ "${KEYFORMAT}" =~ ^[2-4]$ ]]; then
-    if ! mkfs.${KEYFSTYPE} -L "boot-key" "${KEYDEV}" ; then
+    send_prog "Reformating ${KEYDEV}"
+    if ! mkfs.${KEYFSTYPE} -L "BOOT_KEY" "${KEYDEV}" ; then
       send_error "Reformating ${KEYDEV}" ; return 1
     fi
   else
-    send_error "With key format variable - ${KEYFORMAT}"
+    send_error "With key format variable  :  ${KEYFORMAT}"
   fi
 }
 
 function mount_filesystem() {
+  send_prog "Mounting root file system"
   if ! mount /dev/${VGNAME}/${LVROOTNAME} ${TARGETMOUNTPOINT} ; then return 1 ; fi
-  if ! mkdir -p ${TARGETMOUNTPOINT}/home ; then return 1 ; fi
+  if [[ "${WANTSHOME}" -eq 1 ]]; then
+    send_prog "Creating /home"
+    if ! mkdir -p ${TARGETMOUNTPOINT}/home ; then return 1 ; fi
+    send_prog "Mounting /home"
+    if ! mount /dev/${VGNAME}/${LVHOMENAME} ${TARGETMOUNTPOINT}/home ; then return 1 ; fi
+  fi
+  send_prog "Creating /boot"
   if ! mkdir -p ${TARGETMOUNTPOINT}/boot ; then return 1 ; fi
-  if ! mount /dev/${VGNAME}/${LVHOMENAME} ${TARGETMOUNTPOINT}/home ; then return 1 ; fi
+  send_prog "Mounting /boot"
   if ! mount ${DEV}${EFIPARTITION} ${TARGETMOUNTPOINT}/boot ; then return 1 ; fi
+  send_prog "Turning swap on"
   if ! swapon /dev/${VGNAME}/${LVSWAPNAME} ; then return 1 ; fi
 }
 
@@ -123,7 +139,7 @@ function install_base_system() {
 
 function enable_multilib() {
   if [[ $MULTILIB == "1" ]]; then
-    send_prog "Enabling multilib support on ${DEV}${CRYPTPARTITION}"
+    send_prog "Enabling multilib repository"
     cp ${TARGETMOUNTPOINT}/etc/pacman.conf ${TARGETMOUNTPOINT}/etc/pacman.conf.backup
     sed -i -e 's/\#\[multilib\]/\[multilib\]/' -e '/^\[multilib\]/,+1 s/\#//' ${TARGETMOUNTPOINT}/etc/pacman.conf
   fi
@@ -132,34 +148,34 @@ function enable_multilib() {
 function configure_grub_and_hooks() {
   if [[ "$WANTKEY" -eq 1 ]]; then
     export CRYPTKEYGRUB=" cryptkey=UUID=$(lsblk -dno UUID ${KEYDEV}):$(lsblk -dno FSTYPE ${KEYDEV}):${KEYPATH}"
+  else
+    export CRYPTKEYGRUB=""
   fi
   send_prog "Adding ${DEV}${CRYPTPARTITION} uuid to /etc/default/grub"
-  sed -i -e "/LINUX=/a GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$(lsblk -dno UUID ${DEV}${CRYPTPARTITION}):${CRYPTNAME}${SSDGRUB}${CRYPTKEYGRUB}\"" -e '/LINUX=\"\"/d' ${TARGETMOUNTPOINT}/etc/default/grub
-  send_prog "Adding required hooks to /etc/mkinitcpio.conf"
-  sed -i '/^HOOKS=/c HOOKS=(base udev autodetect keyboard keymap modconf block encrypt lvm2 filesystems fsck)' ${TARGETMOUNTPOINT}/etc/mkinitcpio.conf
+  sed -i -e "/GRUB_CMDLINE_LINUX=/c GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$(lsblk -dno UUID ${DEV}${CRYPTPARTITION}):${CRYPTNAME}${SSDGRUB}${CRYPTKEYGRUB}\"" ${TARGETMOUNTPOINT}/etc/default/grub
+  send_prog "Adding required hooks and modules to /etc/mkinitcpio.conf"
+  sed -i -e '/^HOOKS=/c HOOKS=(base udev autodetect keyboard keymap modconf block encrypt lvm2 filesystems fsck)' -e "/^MODULES/c MODULES=($(lsblk -dno FSTYPE ${KEYDEV}))" ${TARGETMOUNTPOINT}/etc/mkinitcpio.conf
 }
 
 function chroot_prep() {
   send_prog "Preparing chroot environment"
-  if ! mkdir -p "${TARGETMOUNTPOINT}/arch-install" ; then return 1 ; fi
-  if ! cp ./* "${TARGETMOUNTPOINT}"/arch-install ; then return 1 ; fi
+  if ! cp -r "${PWD}" "${TARGETMOUNTPOINT}" ; then return 1 ; fi
   send_prog "Setting locale"
-  sed -i 's/#en_US.UTF-8/en_US.UTF-8/' ${TARGETMOUNTPOINT}/etc/locale.gen
-  echo "LANG=en_US.UTF-8" > ${TARGETMOUNTPOINT}/etc/locale.conf
+  sed -i 's/#en_US.UTF-8/en_US.UTF-8/' "${TARGETMOUNTPOINT}/etc/locale.gen"
+  echo "LANG=en_US.UTF-8" > "${TARGETMOUNTPOINT}/etc/locale.conf"
   send_prog "Setting system hostname to ${NEWHOSTNAME}"
-  echo "${NEWHOSTNAME}" > ${TARGETMOUNTPOINT}/etc/hostname
-  if ! grep "127.0.0.1" ${TARGETMOUNTPOINT}/etc/hosts ; then
+  echo "${NEWHOSTNAME}" > "${TARGETMOUNTPOINT}/etc/hostname"
+  if ! grep "127.0.0.1" "${TARGETMOUNTPOINT}/etc/hosts" ; then
     send_prog "Configuring hosts file"
-    echo "127.0.0.1 localhost" >> ${TARGETMOUNTPOINT}/etc/hosts
-    echo "::1       localhost" >> ${TARGETMOUNTPOINT}/etc/hosts
-    echo "127.0.1.1 ${NEWHOSTNAME}.localdomain ${NEWHOSTNAME}" >> ${TARGETMOUNTPOINT}/etc/hosts
+    echo "127.0.0.1 localhost" >> "${TARGETMOUNTPOINT}/etc/hosts"
+    echo "::1       localhost" >> "${TARGETMOUNTPOINT}/etc/hosts"
+    echo "127.0.1.1 ${NEWHOSTNAME}.localdomain ${NEWHOSTNAME}" >> "${TARGETMOUNTPOINT}/etc/hosts"
   fi
   send_prog "Configuring pacman mirrorlist on ${DEV}"
-  echo -e "--sort rate\n--latest 5\n--country \"United States\",Canada\n--save /etc/pacman.d/mirrorlist\n--protocol https\n--download-timeout 15\n--connection-timeout 15" > ${TARGETMOUNTPOINT}/etc/xdg/reflector/reflector.conf
+  echo -e "--sort rate\n--latest 5\n--country \"United States\",Canada\n--save /etc/pacman.d/mirrorlist\n--protocol https\n--download-timeout 15\n--connection-timeout 15" > "${TARGETMOUNTPOINT}/etc/xdg/reflector/reflector.conf"
 }
 
 function chroot_install() {
-  # set grub to install depending on bois or uefi
   send_prog "Chrooting into ${TARGETMOUNTPOINT}"
 cat <<- HEREDOC | arch-chroot ${TARGETMOUNTPOINT}
 cd /arch-install

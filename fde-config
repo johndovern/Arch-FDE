@@ -18,6 +18,18 @@ export LVROOTNAME="root"
 # Cannont contain a +
 export LVROOTSIZE="40G"
 
+# LVM swap name
+export LVSWAPNAME="swap"
+
+# LVM swap size
+# Must be a number followed by an M or G
+# Cannont contain a +
+export LVSWAPSIZE="2G"
+
+# 0  :  Do not create a logical volume for /home
+# 1  :  Create a logical volume for /home
+export WANTSHOME=1
+
 # LVM home name
 export LVHOMENAME="home"
 
@@ -27,14 +39,6 @@ export LVHOMENAME="home"
 # root and swap
 # Cannont contain a +
 export LVHOMESIZE="100"
-
-# LVM swap name
-export LVSWAPNAME="swap"
-
-# LVM swap size
-# Must be a number followed by an M or G
-# Cannont contain a +
-export LVSWAPSIZE="2G"
 
 # Size of EFI system
 # Must be a number followed by an M or G
@@ -46,6 +50,11 @@ export TARGETMOUNTPOINT="/mnt/system"
 
 # Install hostname
 export NEWHOSTNAME="arch-T460"
+
+# Option to enable multilib repo
+# 0  :  Do not enable multilib repo
+# 1  :  Enable multilib repo
+export MULTILIB=1
 
 # This setting must be pressent to run without errors
 # 0  :  Do not enable discards
