@@ -1,0 +1,221 @@
+#!/bin/bash -u
+
+function format_dev() {
+  if [[ "${ERASEALL}" -eq 1 ]] ; then
+    # UEFI
+    if [[  "${ISEFI}" -eq 1 ]] ; then
+      send_prog "Initializing ${DEV} with GPT"
+      # echo -e "${GREEN}...Initializing ${DEV} with GPT${END}"
+      sgdisk --zap-all "${DEV}"
+      if is_error ; then return 1 ; fi
+      send_prog "Creating an EFI partition on ${DEV}"
+      sgdisk --new="${EFIPARTITION}":0:+"${EFISIZE}" --change-name="${EFIPARTITION}":"EFI System"  --typecode="${EFIPARTITION}":ef00 "${DEV}"
+      if is_error ; then return 1 ; fi
+      send_prog "Creating a Linux partition on ${DEV}"
+      sgdisk --new="${CRYPTPARTITION}":0:0    --change-name="${CRYPTPARTITION}":"Linux LUKS" --typecode="${CRYPTPARTITION}":8309 "${DEV}"
+      if is_error ; then return 1 ; fi
+      sgdisk --print "${DEV}"
+    # MBR
+    elif [[ "${ISEFI}" -eq 0 ]] ; then
+      send_prog "Erasing partitiontable of ${DEV}"
+      dd if=/dev/zero of="${DEV}" bs=512 count=1
+      if is_error ; then return 1 ; fi
+      send_prog "Creating a Linux partition on ${DEV} with MBR"
+      sfdisk "${DEV}" <<- HEREDOC
+2M,,L
+HEREDOC
+      if is_error ; then return 1 ; fi
+    fi
+  fi
+}
+
+function encrypt_dev() {
+  send_prog "Initializing ${DEV}${CRYPTPARTITION} as crypt partition"
+  echo -e "${GREEN}Type encryption passprhase${END}"
+  read -sr PASSPHRASE
+  export PASSPHRASE
+  echo -e "${GREEN}Type passprhase again${END}"
+  read -sr PASSPHRASE_C
+  export PASSPHRASE_C
+  while [[ "${PASSPHRASE}" != "${PASSPHRASE_C}" ]]; do
+    echo -e "${RED}Passphrases did not match, try again${END}"
+    read -sr PASSPHRASE
+    export PASSPHRASE
+    echo -e "${GREEN}Type passprhase again${END}"
+    read -sr PASSPHRASE_C
+    export PASSPHRASE_C
+  done
+  send_prog "Initializing ${DEV}${CRYPTPARTITION} as crypt partition"
+  printf %s "${PASSPHRASE}" | cryptsetup luksFormat --iter-time "${ITERTIME}" --key-file - --batch-mode "${DEV}${CRYPTPARTITION}"
+  send_prog "Opening crypt partition ${DEV}${CRYPTPARITION} as ${CRYPTNAME}"
+  printf %s "${PASSPHRASE}" | cryptsetup open -d - "${DEV}${CRYPTPARTITION}" "${CRYPTNAME}"
+  send_prog "Creating physical volume on ${CRYPTNAME}"
+  if ! pvcreate /dev/mapper/${CRYPTNAME} ; then return 1 ; fi
+  send_prog "Creating volume group ${VGNAME}"
+  if ! vgcreate ${VGNAME} /dev/mapper/${CRYPTNAME} ; then return 1 ; fi
+  send_prog "Creating root logical volume ${LVROOTNAME}"
+  if ! lvcreate -n ${LVROOTNAME} -L ${ROOTSIZE} ${VGNAME} ; then return 1 ; fi
+  send_prog "Creating swap logical volume ${LVSWAPNAME}"
+  if ! lvcreate -n ${LVSWAPNAME} -L ${SWAPSIZE} ${VGNAME} ; then return 1 ; fi
+  send_prog "Creating home logical volume ${LVHOMENAME}"
+  if ! lvcreate -n ${LVHOMENAME} -l ${HOMESIZE} ${VGNAME} ; then return 1 ; fi
+}
+
+function luks_add_keyfile() {
+  send_prog "Mounting ${KEYDEV} at ${KEYMOUNT}"
+  if ! mount "${KEYDEV}" "${KEYMOUNT}" ; then send_error "Mounting ${KEYDEV} at ${KEYMOUNT}" ; return 1 ; fi
+  if [ ! -d "${KEYMOUNT}"/keys ]; then
+    send_prog "Creating keys folder on ${KEYDEV}"
+    mkdir -p "${KEYMOUNT}"/keys
+  fi
+  send_prog "Creating keyfile ${KEYNAME} on ${KEYDEV}"
+  if ! dd bs=512 count=4 if=/dev/urandom of="${KEYMOUNT}/keys/${KEYNAME}" iflag=fullblock ; then send_error "Mounting ${KEYDEV} at ${KEYMOUNT}" ; return 1 ; fi
+  if ! chmod u=rx,go-rwx "${KEYMOUNT}"/"${KEYDIR}" ; then send_error "Chmoding ${KEYMOUNT}/${KEYDIR}" ; return 1 ; fi
+  if ! chmod u=r,go-rwx "${KEYMOUNT}""${KEYPATH}" ; then send_error "Chmoding ${KEYMOUNT}/${KEYPATH}" ; return 1 ; fi
+  send_prog "Adding keyfile, ${KEYNAME}, to ${DEV}${CRYPTPARTITION}"
+  printf %s "${PASSPHRASE}" | cryptsetup luksAddKey --iter-time "${ITERTIME}" -d - "${DEV}${CRYPTPARTITION}" "${KEYMOUNT}""${KEYPATH}"
+  send_prog "Unmounting ${KEYDEV}"
+  if ! umount -f "${KEYMOUNT}" ; then send_error "Unmounting ${KEYDEV} at ${KEYMOUNT}" ; return 1 ; fi
+}
+
+function make_filesystem() {
+  send_prog "Creating root filesystem"
+  if ! mkfs.ext4 -L root /dev/${VGNAME}/${LVROOTNAME} ; then send_error "Making root filesystem" ; return 1 ; fi
+  send_prog "Creating home filesystem"
+  if ! mkfs.ext4 -L home /dev/${VGNAME}/${LVHOMENAME} ; then send_error "Making home filesystem" ; return 1 ; fi
+  send_prog "Creating swap"
+  if ! mkswap -L swap /dev/${VGNAME}/${LVSWAPNAME} ; then send_error "Creating swap" ; return 1 ; fi
+  send_prog "Creating boot filesystem"
+  if ! mkfs.vfat -n boot ${DEV}${EFIPARTITION} ; then send_error "Making boot filesystem" ; return 1 ; fi
+}
+
+function reformat_key() {
+  if [[ "${KEYFORMAT}" -eq 1 ]]; then
+    if ! mkfs.vfat -F 32 -n "boot-key" "${KEYDEV}" ; then
+      send_error "Reformatting ${KEYDEV}" ; return 1
+    fi
+  elif [[ "${KEYFORMAT}" =~ ^[2-4]$ ]]; then
+    if ! mkfs.${KEYFSTYPE} -L "boot-key" "${KEYDEV}" ; then
+      send_error "Reformating ${KEYDEV}" ; return 1
+    fi
+  else
+    send_error "With key format variable - ${KEYFORMAT}"
+  fi
+}
+
+function mount_filesystem() {
+  if ! mount /dev/${VGNAME}/${LVROOTNAME} ${TARGETMOUNTPOINT} ; then return 1 ; fi
+  if ! mkdir -p ${TARGETMOUNTPOINT}/home ; then return 1 ; fi
+  if ! mkdir -p ${TARGETMOUNTPOINT}/boot ; then return 1 ; fi
+  if ! mount /dev/${VGNAME}/${LVHOMENAME} ${TARGETMOUNTPOINT}/home ; then return 1 ; fi
+  if ! mount ${DEV}${EFIPARTITION} ${TARGETMOUNTPOINT}/boot ; then return 1 ; fi
+  if ! swapon /dev/${VGNAME}/${LVSWAPNAME} ; then return 1 ; fi
+}
+
+function install_base_system() {
+  send_prog "Sorting pacman mirrors via reflector"
+  reflector --latest 5 --country "United States" --sort rate --save /etc/pacman.d/mirrorlist --protocol https --download-timeout 15
+  send_prog "Installing system to ${DEV}${CRYPTPARTITION}"
+  pacstrap ${TARGETMOUNTPOINT} ${PACKAGELIST}
+  send_prog "Generating fstab"
+  genfstab -U ${TARGETMOUNTPOINT} >> ${TARGETMOUNTPOINT}/etc/fstab
+}
+
+function enable_multilib() {
+  if [[ $MULTILIB == "1" ]]; then
+    send_prog "Enabling multilib support on ${DEV}${CRYPTPARTITION}"
+    cp ${TARGETMOUNTPOINT}/etc/pacman.conf ${TARGETMOUNTPOINT}/etc/pacman.conf.backup
+    sed -i -e 's/\#\[multilib\]/\[multilib\]/' -e '/^\[multilib\]/,+1 s/\#//' ${TARGETMOUNTPOINT}/etc/pacman.conf
+  fi
+}
+
+function configure_grub_and_hooks() {
+  if [[ "$WANTKEY" -eq 1 ]]; then
+    export CRYPTKEYGRUB=" cryptkey=UUID=$(lsblk -dno UUID ${KEYDEV}):$(lsblk -dno FSTYPE ${KEYDEV}):${KEYPATH}"
+  fi
+  send_prog "Adding ${DEV}${CRYPTPARTITION} uuid to /etc/default/grub"
+  sed -i -e "/LINUX=/a GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$(lsblk -dno UUID ${DEV}${CRYPTPARTITION}):${CRYPTNAME}${SSDGRUB}${CRYPTKEYGRUB}\"" -e '/LINUX=\"\"/d' ${TARGETMOUNTPOINT}/etc/default/grub
+  send_prog "Adding required hooks to /etc/mkinitcpio.conf"
+  sed -i '/^HOOKS=/c HOOKS=(base udev autodetect keyboard keymap modconf block encrypt lvm2 filesystems fsck)' ${TARGETMOUNTPOINT}/etc/mkinitcpio.conf
+}
+
+function chroot_prep() {
+  send_prog "Preparing chroot environment"
+  if ! mkdir -p "${TARGETMOUNTPOINT}/arch-install" ; then return 1 ; fi
+  if ! cp ./* "${TARGETMOUNTPOINT}"/arch-install ; then return 1 ; fi
+  send_prog "Setting locale"
+  sed -i 's/#en_US.UTF-8/en_US.UTF-8/' ${TARGETMOUNTPOINT}/etc/locale.gen
+  echo "LANG=en_US.UTF-8" > ${TARGETMOUNTPOINT}/etc/locale.conf
+  send_prog "Setting system hostname to ${NEWHOSTNAME}"
+  echo "${NEWHOSTNAME}" > ${TARGETMOUNTPOINT}/etc/hostname
+  if ! grep "127.0.0.1" ${TARGETMOUNTPOINT}/etc/hosts ; then
+    send_prog "Configuring hosts file"
+    echo "127.0.0.1 localhost" >> ${TARGETMOUNTPOINT}/etc/hosts
+    echo "::1       localhost" >> ${TARGETMOUNTPOINT}/etc/hosts
+    echo "127.0.1.1 ${NEWHOSTNAME}.localdomain ${NEWHOSTNAME}" >> ${TARGETMOUNTPOINT}/etc/hosts
+  fi
+  send_prog "Configuring pacman mirrorlist on ${DEV}"
+  echo -e "--sort rate\n--latest 5\n--country \"United States\",Canada\n--save /etc/pacman.d/mirrorlist\n--protocol https\n--download-timeout 15\n--connection-timeout 15" > ${TARGETMOUNTPOINT}/etc/xdg/reflector/reflector.conf
+}
+
+function chroot_install() {
+  send_prog "Chrooting into ${TARGETMOUNTPOINT}"
+cat <<- HEREDOC | arch-chroot ${TARGETMOUNTPOINT}
+cd /arch-install
+source arch-install-config
+ln -sf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
+systemctl enable NetworkManager
+systemctl enable cups.service
+systemctl enable avahi-daemon
+systemctl enable reflector.service
+systemctl enable reflector.timer
+systemctl enable acpid
+systemctl enable tlp
+mkinitcpio -p linux
+grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id="ARCH_GRUB"
+grub-mkconfig -o /boot/grub/grub.cfg
+hwclock --systohc
+locale-gen
+echo "root:${ROOTPASS}" | chpasswd
+HEREDOC
+  echo test
+}
+
+function is_error() {
+if [[ $? -eq 0 ]] ; then
+	return 1
+else
+  term_message
+	return 0
+fi;
+}
+
+function send_prog() {
+  echo -e "${GREEN}...${1}${END}"
+}
+
+function send_error() {
+  echo -e "${RED}*****  ERROR : ${1}  *****${END}"
+}
+
+function term_message() {
+  echo -e "${RED}***** Installation process terminated *****${END}"
+}
+
+  # OLD DEV format
+  # if [ "${ERASEALL}" -eq 1 ] ; then
+  #   if [  "${ISEFI}" -eq 1 ] ; then
+  #     echo -e "${GREEN}...Initializing ${DEV} with GPT${END}"
+  #     sgdisk --zap-all "${DEV}"
+  #     if is_error ; then return 1 ; fi
+  #     echo -e "${GREEN}...Creating an EFI partition on ${DEV}${END}"
+  #     sgdisk --new="${EFIPARTITION}":0:+"${EFISIZE}" --change-name="${EFIPARTITION}":"EFI System"  --typecode="${EFIPARTITION}":ef00 "${DEV}"
+  #     if is_error ; then return 1 ; fi
+  #     echo -e "${GREEN}...Creating a Linux partition on ${DEV}${END}"
+  #     sgdisk --new="${CRYPTPARTITION}":0:0 --change-name="${CRYPTPARTITION}":"Linux LUKS" --typecode="${CRYPTPARTITION}":8309 "${DEV}"
+  #     if is_error ; then return 1 ; fi
+  #     sgdisk --print "${DEV}"
+  #   else
+  #     return 1
+  #   fi
+  # fi

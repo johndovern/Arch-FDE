@@ -1,0 +1,48 @@
+#!/bin/bash
+
+export DEV=""
+export CRYPTNAME=""
+export VGNAME=""
+export LVROOTNAME=""
+export LVROOTSIZE=""
+export LVHOMENAME=""
+export LVHOMESIZE=""
+export LVSWAPNAME=""
+export LVSWAPSIZE=""
+export EFISIZE=""
+export TARGETMOUNTPOINT=""
+export NEWHOSTNAME=""
+export ROOTPASS=
+export WANTSSDGRUB=
+export WANTKEY=
+export KEYDEV=""
+export KEYFORMAT=""
+export KEYNAME=""
+export KEYMOUNT=""
+export KEYDIR=""
+export KEYPATH=""
+export ERASEALL=
+export OVERWRITEINSTALL=
+export SYSCHANGE=
+export KEYCHANGE=
+export MULTILIB=
+
+# Detect UEFI or MBR
+if [ -d /sys/firmware/efi ]; then
+  export ISEFI=1
+  export EFIPARTITION=1
+  export CRYPTPARTITION=2
+else
+  export ISEFI=0
+  export CRYPTPARTITION=1
+fi
+
+# Do not touch this parameter, unless you understand what you are doing.
+# This is a paameter value of the --iter-time option for cyrptsetup command.
+# If you specify 1000, that means 1000mSec. 0 means compile default.
+export ITERTIME=0
+
+# Colors for status/error messages
+export RED="\e[0;31m"
+export GREEN="\e[0;32m"
+export END="\e[0m"

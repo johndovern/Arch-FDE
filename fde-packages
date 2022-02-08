@@ -1,0 +1,62 @@
+#!/bin/bash
+
+export PACKAGELIST="base \
+linux \
+linux-firmware \
+linux-headers \
+neovim \
+git \
+curl \
+intel-ucode \
+lvm2 \
+grub \
+efibootmgr \
+networkmanager \
+network-manager-applet \
+dialog \
+wpa_supplicant \
+mtools \
+dosfstools \
+reflector \
+base-devel \
+linux-headers \
+avahi \
+xdg-user-dirs \
+xdg-utils \
+gvfs \
+gvfs-smb \
+nfs-utils \
+inetutils \
+dnsutils \
+bluez \
+bluez-utils \
+cups \
+hplip \
+alsa-utils \
+bash-completion \
+openssh \
+rsync \
+acpi \
+acpi_call \
+tlp \
+virt-manager \
+qemu \
+qemu-arch-extra \
+edk2-ovmf \
+bridge-utils \
+dnsmasq \
+vde2 \
+openbsd-netcat \
+iptables-nft \
+ipset \
+flatpak \
+sof-firmware \
+nss-mdns \
+acpid \
+os-prober \
+ntfs-3g"
+
+
+# base base-devel linux linux-firmware linux-headers dosfstools mtools ntfs-3g e2fsprogs networkmanager network-manager-applet wpa_supplicant wireless_tools dialog nano vim micro pacman-contrib reflector git neofetch rsync
+# Guess you could replace networkmanager with connman? Or use the built in networkd/resolved systemd package? Replace wpa_supplicant with iwd? Try out a different Linux kernel compared to the mainline one? LTS? Zen? Hardened?
+# Though now you mention installing curl and wget I'll definitely add those now. Maybe ufw/gufw as well.

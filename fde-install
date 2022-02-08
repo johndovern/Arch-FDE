@@ -1,0 +1,185 @@
+#!/bin/bash -u
+
+export FDECONFIG="fde-config"
+export BLANKCONFIG="fde-blank"
+source "${BLANKCONFIG}"
+
+# if ! ping -W 5 -c 3 gnu.org >/dev/null 2>&1 ; then
+#   echo -e "${RED}Unable to connect to the internet${END}"
+#   exit 1
+# fi
+
+function main() {
+
+  source fde-functions
+  source fde-packages
+  source fde-prompts
+
+  while [[ -z "${SYSCHANGE}" ]] || [[ "${SYSCHANGE}" -eq 1 ]]; do
+    export SYSCHANGE=
+    if ! system_prompts ; then
+      echo -e "${RED}\
+  *****  ERROR : Configuring installation settings  *****${END}
+  Please either review your config or report this issue at
+  https://github.com/johndovern/Arch-FDE-installer"
+      return 1
+    fi
+    system_var_check
+  done
+
+  while [[ -z "${KEYCHANGE}" ]] || [[ "${KEYCHANGE}" -eq 1 ]]; do
+    export KEYCHANGE=
+    if ! key_prompts ; then
+      if [[ ! "${WANTKEY}" =~ ^[0-1]$ ]]; then
+        echo -e "${RED}\
+    *****  ERROR : Configuring keyfile settings  *****${END}
+    Please either review your config or report this issue at
+    https://github.com/johndovern/Arch-FDE-installer"
+        return 1
+      fi
+    fi
+    if [[ "${WANTKEY}" -eq 1 ]]; then
+      key_var_check
+    fi
+  done
+
+  return 0
+
+  if ! format_dev ; then
+    send_error "Unable to format ${DEV}"
+    close_and_unmount
+    return 1
+  fi
+
+  if ! encrypt_dev ; then
+    send_error "Failed to encrypt ${DEV}${CRYPTPARTITION}"
+    close_and_unmount
+    return 1
+  fi
+
+  if [[ "${WANTKEY}" -eq 1 ]]; then
+    if ! luks_add_keyfile ; then
+      send_error "Failed to add a keyfile to ${DEV}${CRYPTPARTITION}"
+      remove_key
+      close_and_unmount
+      return 1
+    fi
+  fi
+
+  if ! make_filesystem ; then
+    send_error "Failed to create filesystem"
+    close_and_unmount
+    return 1
+  fi
+
+  if ! mount_filesystem ; then
+    send_error "Failed to mount filesystem"
+    close_and_unmount
+    return 1
+  fi
+
+  if ! install_base_system ; then
+    send_error "Failed to install base system"
+    close_and_unmount
+    return 1
+  fi
+
+  if ! chroot_prep ; then
+    send_error "Failed to prep for chroot"
+    close_and_unmount
+  fi
+
+  echo -e "${GREEN}Encrypted install completed successfully. Enjoy your new system! ${END}"
+
+}
+
+function remove_key() {
+  if ! mount "${KEYDEV}" "${KEYMOUNT}" ; then
+    send_error "Failed to mount ${KEYDEV} at ${KEYMOUNT}"
+  fi
+  if ! rm -f -- "${KEYMOUNT}""${KEYPATH}" ; then
+    send_error "Failed to remove keyfile at ${KEYMOUNT}${KEYPATH}"
+  fi
+  if ! umount "${KEYMOUNT}" ; then return 1 ; fi
+}
+
+function close_and_unmount() {
+  echo -e "${RED}***** CLOSING AND UNMOUNTING FILE SYSTEM *****${END}"
+  umount "${TARGETMOUNTPOINT}"/home
+  umount "${TARGETMOUNTPOINT}"/boot
+  swapoff /dev/mapper/${VGNAME}-${LVSWAPNAME}
+  umount "${TARGETMOUNTPOINT}"
+  umount "${KEYMOUNT}"
+  vgchange -an
+  cryptsetup close "${CRYPTNAME}"
+}
+
+usage() {
+  cat <<EOF
+Usage :  fde-install [options]
+
+Options:
+ -c [file]          Uses a config file instead of the user being queried
+                    for script options. If no config file is provided
+                    then ${FDECONFIG} will be used if present in the
+                    working directory. Any var not set or set improperly
+                    will result in the user being queried for said var.
+
+ -h, --help         Show this help message and exit. -h and -c are
+                    mutually exclusive.
+EOF
+}
+
+while : ; do
+  if [[ $# -ge 1 ]]; then
+    case $1 in
+      -h | --help) usage ; break ;;
+      -c) shift
+          if [[ $# -ge 1 ]] && [[ "$1" != -* ]]; then
+            FDECONFIG="$1"
+            if [[ -e "$FDECONFIG" ]]; then
+              source "$FDECONFIG"
+              export CONFIGUSED=1
+              shift
+            else
+              echo -e "${RED}Config file does not exist  :  ${FDECONFIG}${END}"
+              exit 1
+            fi
+          elif [[ $# -ge 1 ]] && [[ "$1" == -* ]]; then
+            continue
+          else
+            if [[ -e "${FDECONFIG}" ]]; then
+              source "${FDECONFIG}"
+              export CONFIGUSED=1
+              break
+            else
+              echo -e "${RED}Config file does not exist  :  ${FDECONFIG}${END}"
+              exit 1
+              break
+            fi
+          fi
+          ;;
+      -*) echo -e "${RED}Unrecognized option: ${END}${1}" >&2
+          usage
+          exit 2;;
+      *)
+        break ;;
+    esac
+  else
+    break
+  fi
+done
+
+main
+
+# if [[ -z "$1" ]]; then
+#   main
+# fi
+
+# case "$1" in
+#   "chroot-install") chroot_install ;;
+#   "chroot-debug") chroot_prep && chroot_install ;;
+#   *) ;;
+# esac
+
+exit

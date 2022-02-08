@@ -1,0 +1,142 @@
+#!/bin/bash
+
+# Device for installation
+export DEV="/dev/sda"
+
+# Name of luks crypt partition
+export CRYPTNAME="arch-crypt"
+
+# LVM group name of your system
+# Cannont contain a -
+export VGNAME="system"
+
+# LVM root name
+export LVROOTNAME="root"
+
+# LVM root size
+# Must be a number followed by G or T
+# Cannont contain a +
+export LVROOTSIZE="40G"
+
+# LVM home name
+export LVHOMENAME="home"
+
+# LVM home size
+# Must be a number between 1 and 100
+# This number represents a percentage of DEV left over after formating
+# root and swap
+# Cannont contain a +
+export LVHOMESIZE="100"
+
+# LVM swap name
+export LVSWAPNAME="swap"
+
+# LVM swap size
+# Must be a number followed by an M or G
+# Cannont contain a +
+export LVSWAPSIZE="2G"
+
+# Size of EFI system
+# Must be a number followed by an M or G
+# Cannont contain a +
+export EFISIZE="1G"
+
+# Where to mount DEV
+export TARGETMOUNTPOINT="/mnt/system"
+
+# Install hostname
+export NEWHOSTNAME="arch-T460"
+
+# This setting must be pressent to run without errors
+# 0  :  Do not enable discards
+# 1  :  Enable discards
+export WANTSSDGRUB=
+
+# Setting for /etc/grub/default
+# if DEV is an SSD you can set the following
+# ":allow-discards"
+# which enables trim support for SSD's
+# leave blank if installing to a HDD
+export SSDGRUB=":allow-discards"
+
+# Determines if a keyfile is created and added to DEV[CRYPTPARTITION]
+# 0  :  No I want to type my password at boot
+# 1  :  Yes create and add a keyfile to CRYPTPARTITION
+# NOTE: if you set to 1 you must provide a device for KEYDEV
+# This keyfile is used to decrypt at booot
+export WANTKEY=
+
+# KEYDEV is the device that is used to store your keyfile
+# Must be a partition on a disk and not an entire block device
+# /dev/sdb is not accepted but /dev/sdb[1-9] is
+# If WANTKEY is set to 0 this setting is useless
+export KEYDEV=""
+
+# If you wish to format KEYDEV to a different filesystem the following
+# settings can be used
+# 0  :  Do not reformat KEYDEV
+# *****  THE FOLLOWING WILL ERASE DATA ON KEYDEV  *****
+# 1  :  vfat
+# 2  :  btrfs
+# 3  :  ext4
+# 4  :  xfs
+export KEYFORMAT=
+
+# Name of created keyfile
+# Cannont contain .key anywhere in the name
+export KEYNAME="arch-T460-boot"
+
+# Mount point for KEYDEV
+# Cannont be somewhere on top of TARGETMOUNTPOINT
+export KEYMOUNT="/tmp/stick"
+
+# Directory on KEYDEV where KEYNAME will be stored
+# Must start at the root of KEYDEV
+export KEYDIR="/keys"
+
+# Whether you want to erase all contents of the storage device or not.
+# 0  :  No, I don't. I want to add to the existing LUKS volume.
+# 1  :  Yes, I want to erase all.
+export ERASEALL=
+
+# Root password, if unset you will be promted for one
+export ROOTPASS=
+
+# ***** THE FOLLOWING SETTINGS SHOULD NOT BE ALTERED *****
+# *****   WITHOUT UNDERSTANDING WHAT YOU ARE DOING   *****
+
+# Detect UEFI or MBR
+if [ -d /sys/firmware/efi ]; then
+  export ISEFI=1
+  export EFIPARTITION=1
+  export CRYPTPARTITION=2
+else
+  export ISEFI=0
+  export CRYPTPARTITION=1
+fi
+
+# Do not touch this parameter, unless you understand what you are doing.
+# This is a paameter value of the --iter-time option for cyrptsetup command.
+# If you specify 1000, that means 1000mSec. 0 means compile default.
+export ITERTIME=0
+
+# Do not alter this setting
+export KEYPATH="${KEYDIR}/${KEYNAME}"
+
+# These settings should be left blank
+# Infact unless you edit the main function these will be reset
+# no matter what you set them to
+export SYSCHANGE=
+export KEYCHANGE=
+
+# Colors for status/error messages
+export RED="\e[0;31m"
+export GREEN="\e[0;32m"
+export END="\e[0m"
+
+# Overwriting an install is currently not supported
+# Changing this setting does not do anything
+# Do not touch this parameter, unless you understand what you are doing.
+# 0  :  Create new logical volume as root volume.
+# 1  :  Overwrite the existing logical volume as root volume.
+# export OVERWRITEINSTALL=0
