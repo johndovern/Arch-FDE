@@ -93,7 +93,11 @@ export KEYFORMAT=
 
 # Name of created keyfile
 # Cannont contain .key anywhere in the name
-export KEYNAME="arch-T460-boot"
+export UKEYNAME="arch-T460-boot"
+
+# Leave this blank.
+# It is used to add the .key to $UKEYNAME
+export KEYNAME=""
 
 # Mount point for KEYDEV
 # Cannont be somewhere on top of TARGETMOUNTPOINT

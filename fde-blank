@@ -18,6 +18,7 @@ export WANTSSDGRUB=
 export WANTKEY=
 export KEYDEV=""
 export KEYFORMAT=""
+export UKEYNAME=""
 export KEYNAME=""
 export KEYMOUNT=""
 export KEYDIR=""
