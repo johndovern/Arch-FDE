@@ -313,18 +313,22 @@ function system_var_check() {
 Please review your new system settings${END}
 01 - Install device     :  ${DEV}
 02 - Crypt name         :  ${CRYPTNAME}
-03 - LVM Group name     :  ${VGNAME}
-04 - LVM Root name      :  ${LVROOTNAME}
-05 - LVM Root size      :  ${LVROOTSIZE}
-06 - LVM Swap name      :  ${LVSWAPNAME}
-07 - LVM Swap size      :  ${LVSWAPSIZE}
-08 - LVM Home name      :  ${LVHOMENAME}
-09 - LVM Home size (%)  :  ${LVHOMESIZE}
+03 - LV Group name      :  ${VGNAME}
+04 - LV Root name       :  ${LVROOTNAME}
+05 - LV Root size       :  ${LVROOTSIZE}
+06 - LV Swap name       :  ${LVSWAPNAME}
+07 - LV Swap size       :  ${LVSWAPSIZE}
+08 - LV Home name       :  ${LVHOMENAME}
+09 - LV Home size (%)   :  ${LVHOMESIZE}
 10 - Target mount       :  ${TARGETMOUNTPOINT}
 11 - System Hostname    :  ${NEWHOSTNAME}"
     if [[ "${WANTSSDGRUB}" -eq 1 ]]; then
       echo -e "\
-12 - Discards enabled  :  Yes"
+12 - Discards enabled   :  Yes"
+    fi
+    if [[ "${ISEFI}" -eq 1 ]]; then
+      echo -e "\
+13 - EFI boot size      :  ${EFISIZE}"
     fi
 
     if [[ "${SYSCHANGE}" -ne 1 ]]; then
@@ -356,6 +360,7 @@ Leave blank or enter 0 when done"
       "10") export TARGETMOUNTPOINT= ;;
       "11") export NEWHOSTNAME= ;;
       "12") export WANTSSDGRUB= ;;
+      "13") export EFISIZE= ;;
       *) clear
         echo -e "${RED}Unrecognized option${END}\nDon't forget to include the zero for 01-09"
         sleep 2 ;;
@@ -405,5 +410,20 @@ Leave blank or enter 0 when done"
         sleep 2 ;;
     esac
 
+  done
+}
+
+function confirm_install() {
+  while : ; do
+    clear
+    echo -e "${RED}\
+*****  INSTALLTION CONFIRMATION  *****${END}
+${DEV} is about to be wiped clean and
+a new Arch Linux system will be installed"
+    read -rp "Please enter YES to continue: " ans
+    case "${ans}" in
+      "YES") unset ans ; return 0 ; break ;;
+      *) unset ans ; return 1 ; break ;;
+    esac
   done
 }

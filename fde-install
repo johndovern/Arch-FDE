@@ -45,6 +45,11 @@ https://github.com/johndovern/FDE-Arch"
     fi
   done
 
+  if ! confirm_install ; then
+    send_error "User terminated installation"
+    return 1
+  fi
+
   if [[ ! -d "$KEYMOUNT" ]] && [[ "${WANTKEY}" -eq 1 ]] ; then send_prog "Making direcotry ${KEYMOUNT}" ; mkdir -p "${KEYMOUNT}" ; fi
 
   if ! format_dev ; then
@@ -87,6 +92,12 @@ https://github.com/johndovern/FDE-Arch"
 
   if ! configure_grub_and_hooks ; then
     send_error "Failed to configure grub and mkinitcpo hooks"
+    close_and_unmount
+    return 1
+  fi
+
+  if ! enable_multilib ; then
+    send_error "Failed to enable multilib repo"
     close_and_unmount
     return 1
   fi
