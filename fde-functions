@@ -49,12 +49,12 @@ function encrypt_dev() {
   send_prog "Creating volume group ${VGNAME}"
   if ! vgcreate ${VGNAME} /dev/mapper/${CRYPTNAME} ; then return 1 ; fi
   send_prog "Creating root logical volume ${LVROOTNAME}"
-  if ! lvcreate -n ${LVROOTNAME} -L ${ROOTSIZE} ${VGNAME} ; then return 1 ; fi
+  if ! lvcreate -n ${LVROOTNAME} -L ${LVROOTSIZE} ${VGNAME} ; then return 1 ; fi
   send_prog "Creating swap logical volume ${LVSWAPNAME}"
-  if ! lvcreate -n ${LVSWAPNAME} -L ${SWAPSIZE} ${VGNAME} ; then return 1 ; fi
+  if ! lvcreate -n ${LVSWAPNAME} -L ${LVSWAPSIZE} ${VGNAME} ; then return 1 ; fi
   if [[ "${WANTSHOME}" -eq 1 ]]; then
     send_prog "Creating home logical volume ${LVHOMENAME}"
-    if ! lvcreate -n ${LVHOMENAME} -l ${HOMESIZE} ${VGNAME} ; then return 1 ; fi
+    if ! lvcreate -n ${LVHOMENAME} -l ${LVHOMESIZE} ${VGNAME} ; then return 1 ; fi
   fi
 }
 
