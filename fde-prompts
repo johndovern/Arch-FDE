@@ -59,6 +59,7 @@ Cannot contain a \"${RED}-${END}\""
 
   # WANTSHOME prompt
   while [[ -z "${WANTSHOME}" ]] || [[ ! "${WANTSHOME}" =~ ^[0-1]$ ]] ; do
+    clear
     echo -e "${GREEN}\
 Would you like to create a seprate logical volume for home?${END}
 0  :  Do not create a seperate LV
