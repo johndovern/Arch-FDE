@@ -38,10 +38,10 @@ can reboot into their new installation.
 ### Optional additions
 #### Unlocking with a keyfile at boot
 During the prompt proccess the user may be asked if they want to add a keyfile
-to an external device (usb stick) to unlock their system at boot. A user can
+to an external device to unlock their system at boot. A user can
 also reformat this device if they wish. They can choose from vfat, btrfs, ext4,
 and xfs. I like vfat best as I can use it accross multiple systems, but you may
-want to use this purely with linux and. Either way you've got options.
+want to use this purely with linux. Either way you've got options.
 #### Creating a logical volume for home
 Users can pass the `--home` flag to create a seperate logical volume for home.
 #### Using a preconfigured fde-config
