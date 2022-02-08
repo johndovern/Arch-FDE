@@ -58,3 +58,8 @@ Users can pass the `--home` flag to create a separate logical volume for home.
 This is pretty pointless as the user is prompted for, but it's already added.
 #### Enabling multilib repo
 Users can choose to enable the multilib repo during the prompting phase.
+## Limitations and Disclaimer
+The kaiten-yaki script fully supported BOIS/MBR installations. At present
+fde-install does not support this option. The kaiten-yaki script also supported
+overwriting an install. This script does not support this and there are no
+plans to add this functionality.
