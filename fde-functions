@@ -11,6 +11,8 @@ function format_dev() {
       send_prog "Creating an EFI partition on ${DEV}"
       sgdisk --new="${EFIPARTITION}":0:+"${EFISIZE}" --change-name="${EFIPARTITION}":"EFI System"  --typecode="${EFIPARTITION}":ef00 "${DEV}"
       if is_error ; then return 1 ; fi
+      send_prog "Creating boot filesystem"
+      if ! mkfs.vfat -n boot ${DEV}${EFIPARTITION} ; then send_error "Making boot filesystem" ; return 1 ; fi
       send_prog "Creating a Linux partition on ${DEV}"
       sgdisk --new="${CRYPTPARTITION}":0:0    --change-name="${CRYPTPARTITION}":"Linux LUKS" --typecode="${CRYPTPARTITION}":8309 "${DEV}"
       if is_error ; then return 1 ; fi
@@ -85,8 +87,6 @@ function make_filesystem() {
   if ! mkfs.ext4 -L home /dev/${VGNAME}/${LVHOMENAME} ; then send_error "Making home filesystem" ; return 1 ; fi
   send_prog "Creating swap"
   if ! mkswap -L swap /dev/${VGNAME}/${LVSWAPNAME} ; then send_error "Creating swap" ; return 1 ; fi
-  send_prog "Creating boot filesystem"
-  if ! mkfs.vfat -n boot ${DEV}${EFIPARTITION} ; then send_error "Making boot filesystem" ; return 1 ; fi
 }
 
 function reformat_key() {
@@ -159,6 +159,7 @@ function chroot_prep() {
 }
 
 function chroot_install() {
+  # set grub to install depending on bois or uefi
   send_prog "Chrooting into ${TARGETMOUNTPOINT}"
 cat <<- HEREDOC | arch-chroot ${TARGETMOUNTPOINT}
 cd /arch-install
@@ -170,7 +171,6 @@ systemctl enable avahi-daemon
 systemctl enable reflector.service
 systemctl enable reflector.timer
 systemctl enable acpid
-systemctl enable tlp
 mkinitcpio -p linux
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id="ARCH_GRUB"
 grub-mkconfig -o /boot/grub/grub.cfg

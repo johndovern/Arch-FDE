@@ -38,7 +38,6 @@ openssh \
 rsync \
 acpi \
 acpi_call \
-tlp \
 virt-manager \
 qemu \
 qemu-arch-extra \
@@ -49,14 +48,7 @@ vde2 \
 openbsd-netcat \
 iptables-nft \
 ipset \
-flatpak \
 sof-firmware \
 nss-mdns \
 acpid \
-os-prober \
 ntfs-3g"
-
-
-# base base-devel linux linux-firmware linux-headers dosfstools mtools ntfs-3g e2fsprogs networkmanager network-manager-applet wpa_supplicant wireless_tools dialog nano vim micro pacman-contrib reflector git neofetch rsync
-# Guess you could replace networkmanager with connman? Or use the built in networkd/resolved systemd package? Replace wpa_supplicant with iwd? Try out a different Linux kernel compared to the mainline one? LTS? Zen? Hardened?
-# Though now you mention installing curl and wget I'll definitely add those now. Maybe ufw/gufw as well.

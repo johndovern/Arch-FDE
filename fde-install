@@ -1,5 +1,7 @@
 #!/bin/bash -u
 
+# add -h for installation with a LV for home
+
 export FDECONFIG="fde-config"
 export BLANKCONFIG="fde-blank"
 source "${BLANKCONFIG}"
@@ -19,9 +21,9 @@ function main() {
     export SYSCHANGE=
     if ! system_prompts ; then
       echo -e "${RED}\
-  *****  ERROR : Configuring installation settings  *****${END}
-  Please either review your config or report this issue at
-  https://github.com/johndovern/Arch-FDE-installer"
+*****  ERROR : Configuring installation settings  *****${END}
+Please either review your config or report this issue at
+https://github.com/johndovern/FDE-Arch"
       return 1
     fi
     system_var_check
@@ -32,9 +34,9 @@ function main() {
     if ! key_prompts ; then
       if [[ ! "${WANTKEY}" =~ ^[0-1]$ ]]; then
         echo -e "${RED}\
-    *****  ERROR : Configuring keyfile settings  *****${END}
-    Please either review your config or report this issue at
-    https://github.com/johndovern/Arch-FDE-installer"
+*****  ERROR : Configuring keyfile settings  *****${END}
+Please either review your config or report this issue at
+https://github.com/johndovern/FDE-Arch"
         return 1
       fi
     fi
