@@ -372,7 +372,7 @@ function get_opts() {
 while : ; do
   if [[ $# -ge 1 ]]; then
     case $1 in
-      -h | --help) usage ; break ; return 1 ;;
+      -h | --help) usage ; return 1 ; break ;;
       --home) export WANTSHOME=1 ; shift ;;
       -c) shift
           if [[ $# -ge 1 ]] && [[ "$1" != -* ]]; then
