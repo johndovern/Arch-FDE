@@ -465,7 +465,7 @@ i.e. ${GREEN}/dev/sda${END} and not ${RED}/dev/sda1${END}"
   done
 
   # VGNAME prompt
-  while [[ -z "$VGNAME" ]] || echo "${VGNAME}" | grep -q "-" -i ; do
+  while [[ -z "$VGNAME" ]] || echo "${VGNAME}" | grep -q " \|-" -i ; do
     clear
     echo -e "${GREEN}\
 Please choose a volume group name${END}
@@ -486,7 +486,7 @@ Would you like to create a seprate logical volume for home?${END}
   done
 
   # LVROOTNAME prompt
-  while [[ -z "$LVROOTNAME" ]] || echo "${LVROOTNAME}" | grep -q "-" -i ; do
+  while [[ -z "$LVROOTNAME" ]] || echo "${LVROOTNAME}" | grep -q " \|-" -i ; do
     clear
     echo -e "${GREEN}\
 Please choose a root name${END}
@@ -507,7 +507,7 @@ Must end with a \"${RED}G${END}\", or \"${RED}T${END}\""
   done
 
   # LVSWAPNAME prompt
-  while [[ -z "$LVSWAPNAME" ]] || echo "${LVSWAPNAME}" | grep -q "-" -i ; do
+  while [[ -z "$LVSWAPNAME" ]] || echo "${LVSWAPNAME}" | grep -q " \|-" -i ; do
     clear
     echo -e "${GREEN}\
 Please choose a swap name${END}
@@ -527,26 +527,28 @@ Must end with an \"${RED}M${END}\", or \"${RED}G${END}\""
     export LVSWAPSIZE
   done
 
-  # LVHOMENAME prompt
-  while [[ -z "$LVHOMENAME" ]] || echo "${LVHOMENAME}" | grep -q "-" -i ; do
-    clear
-    echo -e "${GREEN}\
-Please choose a home name${END}
-Cannot contain \"${RED}-${END}\""
-    read -rp "Home name: " LVHOMENAME
-    export LVHOMENAME
-  done
+  if [[ "${WANTSHOME}" -eq 1 ]]; then
+    # LVHOMENAME prompt
+    while [[ -z "$LVHOMENAME" ]] || echo "${LVHOMENAME}" | grep -q " \|-" -i ; do
+      clear
+      echo -e "${GREEN}\
+  Please choose a home name${END}
+  Cannot contain \"${RED}-${END}\""
+      read -rp "Home name: " LVHOMENAME
+      export LVHOMENAME
+    done
 
-  # LVHOMESIZE prompt
-  while [[ -z "$LVHOMESIZE" ]] || ! echo "${LVHOMESIZE}" | grep -E '^100$|^[1-9][0-9]$|^[1-9]$' ; do
-    clear
-    echo -e "${GREEN}\
-Please specify the size of your home volume between 1 and 100${END}
-enter 100 to use 100% of the remaining storage on ${DEV}${CRYPTPARTITION}
-Do not include the \"${RED}%${END}\""
-    read -rp "Home size: " LVHOMESIZE
-    export LVHOMESIZE
-  done
+    # LVHOMESIZE prompt
+    while [[ -z "$LVHOMESIZE" ]] || ! echo "${LVHOMESIZE}" | grep -E '^100$|^[1-9][0-9]$|^[1-9]$' ; do
+      clear
+      echo -e "${GREEN}\
+  Please specify the size of your home volume between 1 and 100${END}
+  enter 100 to use 100% of the remaining storage on ${DEV}${CRYPTPARTITION}
+  Do not include the \"${RED}%${END}\""
+      read -rp "Home size: " LVHOMESIZE
+      export LVHOMESIZE
+    done
+  fi
 
   # EFISIZE prompt
   if [[ "$ISEFI" -eq 1 ]]; then
@@ -848,7 +850,7 @@ a new Arch Linux system will be installed"
 # fde-install
 export FDECONFIG="fde-config"
 export BLANKCONFIG="fde-blank"
-source "${BLANKCONFIG}"
+# source "${BLANKCONFIG}"
 
 function main() {
 
