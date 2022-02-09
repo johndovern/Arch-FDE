@@ -83,7 +83,7 @@ export OVERWRITEINSTALL=
 export SYSCHANGE=
 export KEYCHANGE=
 export MULTILIB=
-export GREPTEST=" \|\!\|@\|#\|%\|\^\|&\|*\|(\|)\|{\|}\|<\|>\|?\|;\|:\|'\||\|\"\|/\|=\|+\|~\|\`"
+export GREPTEST=" \|\!\|@\|#\|%\|\^\|&\|*\|(\|)\|{\|}\|<\|>\|?\|;\|:\|'\||\|\"\|=\|+\|~\|\`"
 
 # Detect UEFI or MBR
 if [ -d /sys/firmware/efi ]; then
