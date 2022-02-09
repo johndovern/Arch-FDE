@@ -298,7 +298,7 @@ function chroot_prep() {
 
 function chroot_install() {
   send_prog "Chrooting into ${TARGETMOUNTPOINT}"
-cat <<- HEREDOC | arch-chroot ${TARGETMOUNTPOINT}
+    cat <<- HEREDOC | arch-chroot ${TARGETMOUNTPOINT}
 cd /arch-install
 source arch-install-config
 ln -sf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
@@ -309,13 +309,23 @@ systemctl enable reflector.service
 systemctl enable reflector.timer
 systemctl enable acpid
 mkinitcpio -p linux
-grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id="ARCH_GRUB"
-grub-mkconfig -o /boot/grub/grub.cfg
 hwclock --systohc
 locale-gen
 echo "root:${ROOTPASS}" | chpasswd
 HEREDOC
-  echo test
+  if [[ "${ISEFI}" -eq 1 ]]; then
+    send_prog "Installing GRUB"
+    cat <<- HEREDOC | arch-chroot ${TARGETMOUNTPOINT}
+grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id="ARCH_GRUB"
+grub-mkconfig -o /boot/grub/grub.cfg
+HEREDOC
+  else
+    send_prog "Installing GRUB"
+    cat <<- HEREDOC | arch-chroot ${TARGETMOUNTPOINT}
+grub-install --target=i386-pc --bootloader-id="ARCH_GRUB" ${DEV}
+grub-mkconfig -o /boot/grub/grub.cfg
+HEREDOC
+  fi
 }
 
 function is_error() {
