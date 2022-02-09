@@ -234,10 +234,12 @@ function mount_filesystem() {
     send_prog "Mounting /home"
     if ! mount /dev/${VGNAME}/${LVHOMENAME} ${TARGETMOUNTPOINT}/home ; then return 1 ; fi
   fi
-  send_prog "Creating /boot"
-  if ! mkdir -p ${TARGETMOUNTPOINT}/boot ; then return 1 ; fi
-  send_prog "Mounting /boot"
-  if ! mount ${DEV}${EFIPARTITION} ${TARGETMOUNTPOINT}/boot ; then return 1 ; fi
+  if [[ "${ISEFI}" -eq 1 ]]; then
+    send_prog "Creating /boot"
+    if ! mkdir -p ${TARGETMOUNTPOINT}/boot ; then return 1 ; fi
+    send_prog "Mounting /boot"
+    if ! mount ${DEV}${EFIPARTITION} ${TARGETMOUNTPOINT}/boot ; then return 1 ; fi
+  fi
   send_prog "Turning swap on"
   if ! swapon /dev/${VGNAME}/${LVSWAPNAME} ; then return 1 ; fi
 }
