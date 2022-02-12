@@ -22,11 +22,10 @@ of them can be found in
 [fde-config.](https://github.com/johndovern/FDE-Arch/blob/master/fde-config)
 After the prompt phase users can review their settings. If they messed up or
 changed their mind they can choose which settings to reset. Once the user is
-satisfied with their settings the installation process will begin. Users will
-be prompted once more for a luks password. After that it's off to the races.
-Once the script finishes you should be greeted with a message saying the
-everything was successful. At this point you should be able to reboot into your
-new system without issue.
+satisfied with their settings the installation process will begin. Once the
+script finishes you should be greeted with a message saying the everything was
+successful. At this point you should be able to reboot into your new system
+without issue.
 ### Useful but optional
 #### Using a preconfigured fde-config
 The kaiten-yaki script is nice, but I perfer to do the bare minimum when
