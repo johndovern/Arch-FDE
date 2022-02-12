@@ -530,7 +530,7 @@ Must end with a \"${RED}G${END}\", or \"${RED}T${END}\""
     clear
     echo -e "${GREEN}\
 Please choose a swap name${END}
-Do not include \"${RED}-${END}\""
+Do not include spaces, special characters, or a minus"
     read -rp "Swap name: " LVSWAPNAME
     export LVSWAPNAME
   done
@@ -552,7 +552,7 @@ Must end with an \"${RED}M${END}\", or \"${RED}G${END}\""
       clear
       echo -e "${GREEN}\
 Please choose a home name${END}
-Do not include \"${RED}-${END}\""
+Do not include spaces, special characters, or a minus"
       read -rp "Home name: " LVHOMENAME
       export LVHOMENAME
     done
