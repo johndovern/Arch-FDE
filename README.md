@@ -9,13 +9,11 @@ linux with full disk encryption. His script can be found
 Booted from a live iso, either in a vm or on bare metal, after establishing an
 internet connection run the following:
 ```bash
-curl -LJO https://raw.githubusercontent.com/johndovern/FDE-Arch/master/fde-install
-chmod +x fde-install
-./fde-install
+curl -O https://raw.githubusercontent.com/johndovern/FDE-Arch/master/fde-install
+bash fde-install
 # required if you plan to use the -c flag
-curl -LJO https://raw.githubusercontent.com/johndovern/FDE-Arch/master/fde-config
-chmod +x fde-config
-./fde-install -c
+curl -O https://raw.githubusercontent.com/johndovern/FDE-Arch/master/fde-config
+bash fde-install -c
 ```
 By running `./fde-install` the user will then be greeted with a series of
 prompts to set things like the target installation disk, their hostname, root
@@ -58,8 +56,12 @@ Users can pass the `--home` flag to create a separate logical volume for home.
 This is pretty pointless as the user is prompted for, but it's already added.
 #### Enabling multilib repo
 Users can choose to enable the multilib repo during the prompting phase.
-## Limitations and Disclaimer
-The kaiten-yaki script fully supported BOIS/MBR installations. At present
-fde-install does not support this option. The kaiten-yaki script also supported
-overwriting an install. This script does not support this and there are no
-plans to add this functionality.
+## Limitations
+The kaiten-yaki script supported overwriting an install. This script does not
+support this and there are no plans to add this functionality.
+## Disclaimer
+The prompts in this script will probably not make sense if you have never
+installed Arch, or another bare bones type distro. This script is really meant
+for someone who is already familiar with what it is doing but doesn't want to
+do everything themselves. I recommend new to Linux users install Arch with full
+disk encryption on their own at least once before using this script.
