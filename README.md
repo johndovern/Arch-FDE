@@ -30,14 +30,15 @@ without issue.
 #### Using a preconfigured fde-config
 The kaiten-yaki script is nice, but I perfer to do the bare minimum when
 installing a system like Arch. If you perfer to edit config files instead of
-responding to prompts then please make use of the fed-config file. This is
+responding to prompts then please make use of the fde-config file. This is
 especially useful if you want to fork this repo and maintain your own
 fde-config file. If your file is properly configured the installation process
 may be very quick by bypassing the prompts. You can still change any settings
 you like at the confirmation stage. All this can be done by running with the
 `-c` flag. This flag optionally takes a config file. If -c is given without a
 file then fde-config will be sourced. The given file must be propperly
-configured (save variable names) or the file will be of little use.
+configured (same variable names) or the file will be of little use. Only use
+the -c flag if there is a config file present, otherwise the script will exit.
 #### Unlocking with a keyfile at boot
 During the prompt process the user will be asked if they want to add a keyfile
 to an external device to unlock their system at boot. Users can also reformat
@@ -52,7 +53,8 @@ function chroot_install if there are any additional user services you wish to
 enable.
 #### Creating a logical volume for home
 Users can pass the `--home` flag to create a separate logical volume for home.
-This is pretty pointless as the user is prompted for, but it's already added.
+This is pretty pointless as the user is prompted for this if the flag is not
+used, but it's already added.
 #### Enabling multilib repo
 Users can choose to enable the multilib repo during the prompting phase.
 ## Limitations
