@@ -66,7 +66,7 @@ export LVHOMESIZE=""
 export LVSWAPNAME=""
 export LVSWAPSIZE=""
 export EFISIZE=""
-export TARGETMOUNTPOINT=""
+export TARGETMOUNTPOINT="/mnt/system"
 export NEWHOSTNAME=""
 export ROOTPASS=
 export WANTSSDGRUB=
@@ -75,7 +75,7 @@ export KEYDEV=""
 export KEYFORMAT=""
 export UKEYNAME=""
 export KEYNAME=""
-export KEYMOUNT=""
+export KEYMOUNT="/tmp/stick"
 export KEYDIR=""
 export KEYPATH=""
 export ERASEALL=
@@ -83,7 +83,10 @@ export OVERWRITEINSTALL=
 export SYSCHANGE=
 export KEYCHANGE=
 export MULTILIB=
+# Do not touch these variables
 export GREPTEST=" \|\!\|@\|#\|%\|\^\|&\|*\|(\|)\|{\|}\|<\|>\|?\|;\|:\|'\||\|\"\|=\|+\|~\|\`"
+export FDECONFIG="fde-config"
+export BLANKCONFIG="fde-blank"
 
 # Detect UEFI or MBR
 if [ -d /sys/firmware/efi ]; then
@@ -124,8 +127,14 @@ function format_dev() {
       if is_error ; then return 1 ; fi
       sgdisk --print "${DEV}"
     else
-      send_error "MBR is not supported at this time"
-      return 1
+      send_prog "Erasing partition table of ${DEV}"
+      dd if=/dev/zero of="${DEV}" bs=512 count=1
+      if is_error ; then return 1 ; fi
+      send_prog "Creating a Linux partition on ${DEV} with MBR"
+      sfdisk "${DEV}" <<- HEREDOC
+2M,,L
+HEREDOC
+      if is_error ; then return 1 ; fi
     fi
   fi
 }
@@ -151,25 +160,25 @@ function encrypt_dev() {
   send_prog "Opening crypt partition ${DEV}${CRYPTPARTITION} as ${CRYPTNAME}"
   printf %s "${PASSPHRASE}" | cryptsetup open -d - "${DEV}${CRYPTPARTITION}" "${CRYPTNAME}"
   send_prog "Creating physical volume on ${CRYPTNAME}"
-  if ! pvcreate /dev/mapper/${CRYPTNAME} ; then return 1 ; fi
+  if ! pvcreate "/dev/mapper/${CRYPTNAME}" ; then return 1 ; fi
   send_prog "Creating volume group ${VGNAME}"
-  if ! vgcreate ${VGNAME} /dev/mapper/${CRYPTNAME} ; then return 1 ; fi
-  send_prog "Creating root logical volume ${LVROOTNAME}"
-  if ! lvcreate -n ${LVROOTNAME} -L ${LVROOTSIZE} ${VGNAME} ; then return 1 ; fi
-  send_prog "Creating swap logical volume ${LVSWAPNAME}"
-  if ! lvcreate -n ${LVSWAPNAME} -L ${LVSWAPSIZE} ${VGNAME} ; then return 1 ; fi
+  if ! vgcreate "${VGNAME}" "/dev/mapper/${CRYPTNAME}" ; then return 1 ; fi
+  send_prog "Creating logical volume for root  :  ${LVROOTNAME}"
+  if ! lvcreate -n "${LVROOTNAME}" -L "${LVROOTSIZE}" "${VGNAME}" ; then return 1 ; fi
+  send_prog "Creating logical volume for swap  :  ${LVSWAPNAME}"
+  if ! lvcreate -n "${LVSWAPNAME}" -L "${LVSWAPSIZE}" "${VGNAME}" ; then return 1 ; fi
   if [[ "${WANTSHOME}" -eq 1 ]]; then
-    send_prog "Creating home logical volume ${LVHOMENAME}"
-    if ! lvcreate -n ${LVHOMENAME} -l ${LVHOMESIZE} ${VGNAME} ; then return 1 ; fi
+    send_prog "Creating logical volume for home  :  ${LVHOMENAME}"
+    if ! lvcreate -n "${LVHOMENAME}" -l "${LVHOMESIZE}%FREE" "${VGNAME}" ; then return 1 ; fi
   fi
 }
 
 function luks_add_keyfile() {
   send_prog "Mounting ${KEYDEV} at ${KEYMOUNT}"
   if ! mount "${KEYDEV}" "${KEYMOUNT}" ; then send_error "Mounting ${KEYDEV} at ${KEYMOUNT}" ; return 1 ; fi
-  if [[ ! -d "${KEYMOUNT}"/"${KEYDIR}" ]]; then
+  if [[ ! -d "${KEYMOUNT}/${KEYDIR}" ]]; then
     send_prog "Creating directory ${KEYDIR} on ${KEYDEV}"
-    mkdir -p "${KEYMOUNT}"/"${KEYDIR}"
+    mkdir -p "${KEYMOUNT}/${KEYDIR}"
   else
     send_prog "${KEYDIR} already exists on ${KEYDEV} checking for keyfile"
   fi
@@ -226,10 +235,12 @@ function mount_filesystem() {
     send_prog "Mounting /home"
     if ! mount /dev/${VGNAME}/${LVHOMENAME} ${TARGETMOUNTPOINT}/home ; then return 1 ; fi
   fi
-  send_prog "Creating /boot"
-  if ! mkdir -p ${TARGETMOUNTPOINT}/boot ; then return 1 ; fi
-  send_prog "Mounting /boot"
-  if ! mount ${DEV}${EFIPARTITION} ${TARGETMOUNTPOINT}/boot ; then return 1 ; fi
+  if [[ "${ISEFI}" -eq 1 ]]; then
+    send_prog "Creating /boot"
+    if ! mkdir -p ${TARGETMOUNTPOINT}/boot ; then return 1 ; fi
+    send_prog "Mounting /boot"
+    if ! mount ${DEV}${EFIPARTITION} ${TARGETMOUNTPOINT}/boot ; then return 1 ; fi
+  fi
   send_prog "Turning swap on"
   if ! swapon /dev/${VGNAME}/${LVSWAPNAME} ; then return 1 ; fi
 }
@@ -266,6 +277,9 @@ function configure_grub_and_hooks() {
   sed -i -e "/GRUB_CMDLINE_LINUX=/c GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$(lsblk -dno UUID ${DEV}${CRYPTPARTITION}):${CRYPTNAME}${SSDGRUB} root=/dev/mapper/${VGNAME}-${LVROOTNAME}${CRYPTKEYGRUB}\"" "${TARGETMOUNTPOINT}/etc/default/grub"
   send_prog "Adding required hooks and modules to /etc/mkinitcpio.conf"
   sed -i -e '/^HOOKS=/c HOOKS=(base udev autodetect keyboard keymap modconf block encrypt lvm2 filesystems fsck)' "${TARGETMOUNTPOINT}/etc/mkinitcpio.conf"
+  if [[ "${ISEFI}" -eq 0 ]]; then
+    sed -i '/^#GRUB_ENABLE_CRYPTODISK=y$/c GRUB_ENABLE_CRYPTODISK=y'
+  fi
 }
 
 function chroot_prep() {
@@ -289,8 +303,6 @@ function chroot_prep() {
 function chroot_install() {
   send_prog "Chrooting into ${TARGETMOUNTPOINT}"
 cat <<- HEREDOC | arch-chroot ${TARGETMOUNTPOINT}
-cd /arch-install
-source arch-install-config
 ln -sf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
 systemctl enable NetworkManager
 systemctl enable cups.service
@@ -299,13 +311,23 @@ systemctl enable reflector.service
 systemctl enable reflector.timer
 systemctl enable acpid
 mkinitcpio -p linux
-grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id="ARCH_GRUB"
-grub-mkconfig -o /boot/grub/grub.cfg
 hwclock --systohc
 locale-gen
 echo "root:${ROOTPASS}" | chpasswd
 HEREDOC
-  echo test
+  if [[ "${ISEFI}" -eq 1 ]]; then
+    send_prog "Installing GRUB"
+    cat <<- HEREDOC | arch-chroot ${TARGETMOUNTPOINT}
+grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id="ARCH_GRUB"
+grub-mkconfig -o /boot/grub/grub.cfg
+HEREDOC
+  else
+    send_prog "Installing GRUB"
+    cat <<- HEREDOC | arch-chroot ${TARGETMOUNTPOINT}
+grub-install --target=i386-pc --bootloader-id="ARCH_GRUB" ${DEV}
+grub-mkconfig -o /boot/grub/grub.cfg
+HEREDOC
+  fi
 }
 
 function is_error() {
@@ -322,7 +344,7 @@ function send_prog() {
 }
 
 function send_error() {
-  echo -e "${RED}*****  ERROR : ${1} *****${END}"
+  echo -e "${RED}***** ERROR  :  ${1} *****${END}"
 }
 
 function term_message() {
@@ -341,9 +363,9 @@ function remove_key() {
 
 function close_and_unmount() {
   echo -e "${RED}***** CLOSING AND UNMOUNTING FILE SYSTEM *****${END}"
-  umount "${TARGETMOUNTPOINT}"/home
-  umount "${TARGETMOUNTPOINT}"/boot
-  swapoff /dev/mapper/${VGNAME}-${LVSWAPNAME}
+  umount "${TARGETMOUNTPOINT}/home"
+  umount "${TARGETMOUNTPOINT}/boot"
+  swapoff "/dev/mapper/${VGNAME}-${LVSWAPNAME}"
   umount "${TARGETMOUNTPOINT}"
   umount "${KEYMOUNT}"
   vgchange -an
@@ -364,8 +386,7 @@ Options:
  --home             A logical volume for /home will be created during
                     the installation process.
 
- -h, --help         Show this help message and exit. -h and -c are
-                    mutually exclusive.
+ -h, --help         Show this help message and exit.
 EOF
 }
 
@@ -378,8 +399,8 @@ while : ; do
       -c) shift
           if [[ $# -ge 1 ]] && [[ "$1" != -* ]]; then
             FDECONFIG="$1"
-            if [[ -e "$FDECONFIG" ]]; then
-              source "$FDECONFIG"
+            if [[ -e "${FDECONFIG}" ]]; then
+              source "${FDECONFIG}"
               export CONFIGUSED=1
               shift
             else
@@ -422,19 +443,17 @@ done
 function system_prompts() {
 
   # ERASEALL prompt
-  while [[ -z "$ERASEALL" ]] || [[ ! "$ERASEALL" =~ ^[0-1]$ ]]; do
+  while [[ -z "${ERASEALL}" ]] || [[ ! "${ERASEALL}" =~ ^[0-1]$ ]]; do
     clear
     echo -e "${RED}\
 This script will erase all the data on the install target${END}
-Currently this script is not robust enough to support anything
-but installing to a blank drive
 0  :  Do not proceed, I don't want to erase anything
 1  :  Yes, I want to erase the contents of my device"
     read -rp "Proceed? " ERASEALL
     export ERASEALL
   done
 
-  if [[ "$ERASEALL" -eq 0 ]]; then return 1 ; fi
+  if [[ "${ERASEALL}" -eq 0 ]]; then return 1 ; fi
 
   # Setting some vars
   if [ -d /sys/firmware/efi ]; then
@@ -447,7 +466,7 @@ but installing to a blank drive
   fi
 
   # DEV prompt
-  while [[ -z "$DEV" ]] || [[ ! -e "${DEV}" ]] || ! echo "${DEV}" | grep -q -v "[0-9]$" ; do
+  while [[ -z "${DEV}" ]] || [[ ! -e "${DEV}" ]] || ! echo "${DEV}" | grep -q -v "[0-9]$" ; do
     clear
     lsblk
     echo -e "${GREEN}\
@@ -458,7 +477,7 @@ i.e. ${GREEN}/dev/sda${END} and not ${RED}/dev/sda1${END}"
   done
 
   # CRYPTNAME prompt
-  while [[ -z "$CRYPTNAME" ]] || echo "${CRYPTNAME}" | grep -q "${GREPTEST}" ; do
+  while [[ -z "${CRYPTNAME}" ]] || echo "${CRYPTNAME}" | grep -q "${GREPTEST}" ; do
     clear
     echo -e "${GREEN}Please choose a sane name for your encrypted drive i.e. arch-crypt${END}"
     read -rp "Crypt name: " CRYPTNAME
@@ -466,11 +485,11 @@ i.e. ${GREEN}/dev/sda${END} and not ${RED}/dev/sda1${END}"
   done
 
   # VGNAME prompt
-  while [[ -z "$VGNAME" ]] || echo "${VGNAME}" | grep -q "${GREPTEST}\|-" -i ; do
+  while [[ -z "${VGNAME}" ]] || echo "${VGNAME}" | grep -q "${GREPTEST}\|-" -i ; do
     clear
     echo -e "${GREEN}\
 Please choose a volume group name${END}
-Cannot contain spaces, special characters, or a minus"
+Do not include spaces, special characters, or a minus"
     read -rp "Volume group name: " VGNAME
     export VGNAME
   done
@@ -480,49 +499,48 @@ Cannot contain spaces, special characters, or a minus"
     clear
     echo -e "${GREEN}\
 Would you like to create a seprate logical volume for home?${END}
-0  :  Do not create a seperate LV for home
-1  :  Create a seperate LV for home"
+0  :  Do not create a separate LV for home
+1  :  Create a separate LV for home"
     read -rp "Create LV for home? " WANTSHOME
     export WANTSHOME
   done
 
   # LVROOTNAME prompt
-  while [[ -z "$LVROOTNAME" ]] || echo "${LVROOTNAME}" | grep -q "${GREPTEST}\|-" -i ; do
+  while [[ -z "${LVROOTNAME}" ]] || echo "${LVROOTNAME}" | grep -q "${GREPTEST}\|-" -i ; do
     clear
     echo -e "${GREEN}\
 Please choose a root name${END}
-Cannot contain a \"${RED}-${END}\""
+Do not include spaces, special characters, or a minus"
     read -rp "Root name: " LVROOTNAME
     export LVROOTNAME
   done
 
   # LVROOTSIZE prompt
-  while [[ -z "$LVROOTSIZE" ]] || ! echo "${LVROOTSIZE}" | grep -E '^[0-9].*[G|T]$' | grep -q -v "${GREPTEST}\|+\|%\|-" ; do
+  while [[ -z "${LVROOTSIZE}" ]] || ! echo "${LVROOTSIZE}" | grep -E '^[0-9]+[G|T]$' | grep -q -v "${GREPTEST}\|-" ; do
     clear
     echo -e "${GREEN}\
 Please specify the size of your root volume i.e. 10G${END}
-Cannot contain a \"${RED}+${END}\"
 Must end with a \"${RED}G${END}\", or \"${RED}T${END}\""
     read -rp "Root size: " LVROOTSIZE
     export LVROOTSIZE
   done
 
   # LVSWAPNAME prompt
-  while [[ -z "$LVSWAPNAME" ]] || echo "${LVSWAPNAME}" | grep -q "${GREPTEST}\|-" -i ; do
+  while [[ -z "${LVSWAPNAME}" ]] || echo "${LVSWAPNAME}" | grep -q "${GREPTEST}\|-" -i ; do
     clear
     echo -e "${GREEN}\
 Please choose a swap name${END}
-Cannot contain \"${RED}-${END}\""
+Do not include \"${RED}-${END}\""
     read -rp "Swap name: " LVSWAPNAME
     export LVSWAPNAME
   done
 
   # LVSWAPSIZE prompt
-  while [[ -z "$LVSWAPSIZE" ]] || ! echo "${LVSWAPSIZE}" | grep -E '^[0-9].*[M|G]$' | grep -q -v "${GREPTEST}\|+\|%\|-" ; do
+  while [[ -z "${LVSWAPSIZE}" ]] || ! echo "${LVSWAPSIZE}" | grep -E '^[0-9]+[M|G]$' | grep -q -v "${GREPTEST}\|-" ; do
     clear
     echo -e "${GREEN}\
 Please specify the size of your swap volume i.e. 2G${END}
-Cannot contain a \"${RED}+${END}\"
+Do not include a \"${RED}+${END}\"
 Must end with an \"${RED}M${END}\", or \"${RED}G${END}\""
     read -rp "Swap size: " LVSWAPSIZE
     export LVSWAPSIZE
@@ -530,17 +548,17 @@ Must end with an \"${RED}M${END}\", or \"${RED}G${END}\""
 
   if [[ "${WANTSHOME}" -eq 1 ]]; then
     # LVHOMENAME prompt
-    while [[ -z "$LVHOMENAME" ]] || echo "${LVHOMENAME}" | grep -q "${GREPTEST}\|-" -i ; do
+    while [[ -z "${LVHOMENAME}" ]] || echo "${LVHOMENAME}" | grep -q "${GREPTEST}\|-" -i ; do
       clear
       echo -e "${GREEN}\
 Please choose a home name${END}
-Cannot contain \"${RED}-${END}\""
+Do not include \"${RED}-${END}\""
       read -rp "Home name: " LVHOMENAME
       export LVHOMENAME
     done
 
     # LVHOMESIZE prompt
-    while [[ -z "$LVHOMESIZE" ]] || ! echo "${LVHOMESIZE}" | grep -E '^100$|^[1-9][0-9]$|^[1-9]$' ; do
+    while [[ -z "${LVHOMESIZE}" ]] || ! echo "${LVHOMESIZE}" | grep -E '^100$|^[1-9][0-9]$|^[1-9]$' ; do
       clear
       echo -e "${GREEN}\
 Please specify the size of your home volume between 1 and 100${END}
@@ -552,12 +570,12 @@ Do not include the \"${RED}%${END}\""
   fi
 
   # EFISIZE prompt
-  if [[ "$ISEFI" -eq 1 ]]; then
-    while [[ -z "$EFISIZE" ]] || ! echo "${EFISIZE}" | grep -E '^[0-9].*[M|G]$' | grep -q -v "${GREPTEST}\|^0[M\|G]$" ; do
+  if [[ "${ISEFI}" -eq 1 ]]; then
+    while [[ -z "${EFISIZE}" ]] || ! echo "${EFISIZE}" | grep -E '^[0-9]+[M|G]$' | grep -q -v "${GREPTEST}\|^0[M\|G]$" ; do
       clear
       echo -e "${GREEN}\
 Please specify the size of your EFI partition${END}
-Cannot contain a \"${RED}+${END}\"
+Do not include a \"${RED}+${END}\"
 Must end with an \"${RED}M${END}\", or \"${RED}G${END}\""
       read -rp "EFI size: " EFISIZE
       export EFISIZE
@@ -565,9 +583,9 @@ Must end with an \"${RED}M${END}\", or \"${RED}G${END}\""
   fi
 
   # TARGETMOUNTPOINT prompt
-  while [[ -z "$TARGETMOUNTPOINT" ]] || ! echo "${TARGETMOUNTPOINT}" | grep -q "^/" || grep -sq " ${TARGETMOUNTPOINT}" /proc/mounts || echo "${TARGETMOUNTPOINT}" | grep -q "${GREPTEST}"; do
+  while [[ -z "${TARGETMOUNTPOINT}" ]] || ! echo "${TARGETMOUNTPOINT}" | grep -q "^/" || grep -sq " ${TARGETMOUNTPOINT}" /proc/mounts || echo "${TARGETMOUNTPOINT}" | grep -q "${GREPTEST}"; do
     clear
-      if [[ -n "$TARGETMOUNTPOINT" ]] && grep -sq " ${TARGETMOUNTPOINT}" /proc/mounts ; then
+      if [[ -n "${TARGETMOUNTPOINT}" ]] && grep -sq " ${TARGETMOUNTPOINT}" /proc/mounts ; then
         echo -e "${RED}The given location is occupied. Please select a free mount point.${END}"
       fi
     echo -e "${GREEN}\
@@ -578,17 +596,17 @@ If the directory does not exist, it will be created"
   done
 
   # NEWHOSTNAME prompt
-  while [[ -z "$NEWHOSTNAME" ]] || echo "${NEWHOSTNAME}" | grep -q "${GREPTEST}"; do
+  while [[ -z "${NEWHOSTNAME}" ]] || echo "${NEWHOSTNAME}" | grep -q "${GREPTEST}"; do
     clear
     echo -e "${GREEN}\
 Please specify the hostname of the new system${END}
-Enter something sane, there are no major checks for this"
+Do not include spaces, special characters, or a minus"
     read -rp "New hostname: " NEWHOSTNAME
     export NEWHOSTNAME
   done
 
   # ROOTPASS prompt
-  while [[ -z "$ROOTPASS" ]] ; do
+  while [[ -z "${ROOTPASS}" ]] ; do
     clear
    echo -e "${GREEN}Please specify your root password for your new system${END}"
     read -sr ROOTPASS
@@ -608,7 +626,7 @@ Enter something sane, there are no major checks for this"
   done
 
   # MULTILIB prompt
-  while [[ -z "$MULTILIB" ]] || [[ ! "$MULTILIB" =~ ^[0-1]$ ]] ; do
+  while [[ -z "${MULTILIB}" ]] || [[ ! "${MULTILIB}" =~ ^[0-1]$ ]] ; do
     clear
     echo -e "${GREEN}\
 Would you like to enable the multilib repository?${END}
@@ -619,7 +637,7 @@ Would you like to enable the multilib repository?${END}
   done
 
   # SSDGRUB prompt
-  while [[ -z "$WANTSSDGRUB" ]] || [[ ! "$WANTSSDGRUB" =~ ^[0-1]$ ]] && lsblk --discard "${DEV}" | grep -q "[1-9]" ; do
+  while [[ -z "${WANTSSDGRUB}" ]] || [[ ! "${WANTSSDGRUB}" =~ ^[0-1]$ ]] && lsblk --discard "${DEV}" | grep -q "[1-9]" ; do
     clear
     echo -e "${RED}\
 *****  PLEASE MAKE SURE YOU UNDERSTAND THE  *****
@@ -640,7 +658,7 @@ ${GREEN}${DEV} supports TRIM, do you want to enable discards?${END}
 
 function key_prompts() {
   # WANTKEY prompt
-  while [[ ! "$WANTKEY" =~ ^[0-1]$ ]]; do
+  while [[ ! "${WANTKEY}" =~ ^[0-1]$ ]]; do
     clear
     echo -e "${GREEN}\
 Would you like to use a keyfile on an external drive to unlock LUKS at boot?${END}
@@ -651,7 +669,7 @@ Would you like to use a keyfile on an external drive to unlock LUKS at boot?${EN
   done
 
   # Key prompts if user wants a keyfile
-  if [[ "$WANTKEY" -eq 0 ]]; then export KEYCHANGE=0 ; return 1 ; fi
+  if [[ "${WANTKEY}" -eq 0 ]]; then export KEYCHANGE=0 ; return 1 ; fi
 
   # KEYDEV prompt
   while [[ ! -e "${KEYDEV}" ]] || [[ -z "${KEYDEV}" ]] || echo "${KEYDEV}" | grep -q "${DEV}" || ! echo "${KEYDEV}" | grep -q -E "*[0-9]+$" || echo "${KEYDEV}" | grep -q "${GREPTEST}"; do
@@ -666,7 +684,7 @@ Choose an external drive and not ${DEV}"
   done
 
   # KEYFORMAT prompt
-    while [[ -z "$KEYFORMAT" ]] || [[ ! "$KEYFORMAT" =~ ^[0-4]$ ]]; do
+    while [[ -z "${KEYFORMAT}" ]] || [[ ! "${KEYFORMAT}" =~ ^[0-4]$ ]]; do
       clear
       echo -e "${GREEN}\
 Detected ${KEYDEV} filesystem as  :  $(lsblk -dno FSTYPE ${KEYDEV})${END}
@@ -701,9 +719,9 @@ Would you like to reformat to another filesystem?
     done
 
   # KEYMOUNT prompt
-    while [[ -z "$KEYMOUNT" ]] || grep -sq " ${KEYMOUNT}" /proc/mounts || ! echo "$KEYMOUNT" | grep -q "^/" || [[ "$TARGETMOUNTPOINT" == "$KEYMOUNT" ]] || echo "$KEYMOUNT" | grep -q "${GREPTEST}\|^${TARGETMOUNTPOINT}" ; do
+    while [[ -z "${KEYMOUNT}" ]] || grep -sq " ${KEYMOUNT}" /proc/mounts || ! echo "${KEYMOUNT}" | grep -q "^/" || [[ "$TARGETMOUNTPOINT" == "$KEYMOUNT" ]] || echo "${KEYMOUNT}" | grep -q "${GREPTEST}\|^${TARGETMOUNTPOINT}" ; do
       clear
-      if [[ -n "$KEYMOUNT" ]] && grep -sq " ${KEYMOUNT}" /proc/mounts ; then
+      if [[ -n "${KEYMOUNT}" ]] && grep -sq " ${KEYMOUNT}" /proc/mounts ; then
         echo -e "${RED}The given location is occupied. Please select a free mount point.${END}"
       fi
       echo -e "${GREEN}Please specify a location, starting at root${END} \"${RED}/${END}\" ${GREEN}to mount your keyfile.${END}
@@ -713,11 +731,11 @@ Would you like to reformat to another filesystem?
     done
 
   # KEYDIR prompt
-    while [[ -z "$KEYDIR" ]] || ! echo "$KEYDIR" | grep -q "^/" || echo "${KEYDIR}" | grep -q "${GREPTEST}"; do
+    while [[ -z "${KEYDIR}" ]] || ! echo "${KEYDIR}" | grep -q "^/" || echo "${KEYDIR}" | grep -q "${GREPTEST}"; do
       clear
       echo -e "${GREEN}Please specify a location on ${KEYDEV} to store your keyfile.${END}
 If the location does not exist it will be created.
-If ${KEYNAME}.key exists at this location then it will
+If ${KEYNAME} exists at this location then it will
 be used to encrypt ${DEV}${CRYPTPARTITION}"
       read -rp "Keyfile directory: " KEYDIR
       export KEYDIR
@@ -742,13 +760,23 @@ Please review your new system settings${END}
 09 - LV Home size (%)   :  ${LVHOMESIZE}
 10 - Target mount       :  ${TARGETMOUNTPOINT}
 11 - System Hostname    :  ${NEWHOSTNAME}"
+    if [[ "${MULTILIB}" -eq 1 ]]; then
+      echo -e "\
+12 - Multilib enabled   :  Yes"
+    else
+      echo -e "\
+12 - Multilib enabled   :  No"
+    fi
     if [[ "${WANTSSDGRUB}" -eq 1 ]]; then
       echo -e "\
-12 - Discards enabled   :  Yes"
+13 - Discards enabled   :  Yes"
+    else
+      echo -e "\
+13 - Discards enabled   :  No"
     fi
     if [[ "${ISEFI}" -eq 1 ]]; then
       echo -e "\
-13 - EFI boot size      :  ${EFISIZE}"
+14 - EFI boot size      :  ${EFISIZE}"
     fi
 
     if [[ "${SYSCHANGE}" -ne 1 ]]; then
@@ -779,8 +807,9 @@ Leave blank or enter 0 when done"
       "09") export LVHOMESIZE=  ;;
       "10") export TARGETMOUNTPOINT= ;;
       "11") export NEWHOSTNAME= ;;
-      "12") export WANTSSDGRUB= ;;
-      "13") export EFISIZE= ;;
+      "12") export MULTILIB= ;;
+      "13") export WANTSSDGRUB= ;;
+      "14") export EFISIZE= ;;
       *) clear
         echo -e "${RED}Unrecognized option${END}\nDon't forget to include the zero for 01-09"
         sleep 2 ;;
@@ -849,15 +878,8 @@ a new Arch Linux system will be installed"
 }
 
 # fde-install
-export FDECONFIG="fde-config"
-export BLANKCONFIG="fde-blank"
-# source "${BLANKCONFIG}"
 
 function main() {
-
-  # source fde-functions
-  # source fde-packages
-  # source fde-prompts
 
   if ! get_opts "$@" ; then
     return 1
@@ -960,7 +982,7 @@ https://github.com/johndovern/FDE-Arch"
     close_and_unmount
   fi
 
-  echo -e "${GREEN}Encrypted install completed successfully. Enjoy your new system!${END}"
+  echo -e "${GREEN}Encrypted installation completed successfully. Enjoy your new system!${END}"
 
 }
 
