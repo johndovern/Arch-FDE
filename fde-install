@@ -156,7 +156,11 @@ function encrypt_dev() {
     export PASSPHRASE_C
   done
   send_prog "Initializing ${DEV}${CRYPTPARTITION} as crypt partition"
-  printf %s "${PASSPHRASE}" | cryptsetup luksFormat --iter-time "${ITERTIME}" --key-file - --batch-mode "${DEV}${CRYPTPARTITION}"
+  if [[ "${ISEFI}" -eq 1 ]]; then
+    printf %s "${PASSPHRASE}" | cryptsetup luksFormat --iter-time "${ITERTIME}" --key-file - --batch-mode "${DEV}${CRYPTPARTITION}"
+  else
+    printf %s "${PASSPHRASE}" | cryptsetup luksFormat --iter-time "${ITERTIME}" --type=luks1 --key-file - --batch-mode "${DEV}${CRYPTPARTITION}"
+  fi
   send_prog "Opening crypt partition ${DEV}${CRYPTPARTITION} as ${CRYPTNAME}"
   printf %s "${PASSPHRASE}" | cryptsetup open -d - "${DEV}${CRYPTPARTITION}" "${CRYPTNAME}"
   send_prog "Creating physical volume on ${CRYPTNAME}"
