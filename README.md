@@ -56,8 +56,11 @@ This is pretty pointless as the user is prompted for, but it's already added.
 #### Enabling multilib repo
 Users can choose to enable the multilib repo during the prompting phase.
 ## Limitations
-The kaiten-yaki script supported overwriting an install. This script does not
-support this and there are no plans to add this functionality.
+- The kaiten-yaki script supported overwriting an install. This script does not
+  support this and there are no plans to add this functionality.
+- Currently root and home will be formated as ext4. I have no plans to change
+  this but if you are familiar with btrfs feel free to submit a PR or
+  suggestion an I will consider implementing btrfs support.
 ## Disclaimer
 The prompts in this script will probably not make sense if you have never
 installed Arch, or another bare bones type distro. This script is really meant
