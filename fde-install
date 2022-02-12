@@ -140,46 +140,46 @@ HEREDOC
 }
 
 function encrypt_dev() {
-  send_prog "Initializing ${DEV}${CRYPTPARTITION} as crypt partition"
-  echo -e "${GREEN}Type encryption passprhase${END}"
-  read -sr PASSPHRASE
-  export PASSPHRASE
-  echo -e "${GREEN}Type passprhase again${END}"
-  read -sr PASSPHRASE_C
-  export PASSPHRASE_C
-  while [[ "${PASSPHRASE}" != "${PASSPHRASE_C}" ]]; do
-    echo -e "${RED}Passphrases did not match, try again${END}"
-    read -sr PASSPHRASE
-    export PASSPHRASE
-    echo -e "${GREEN}Type passprhase again${END}"
-    read -sr PASSPHRASE_C
-    export PASSPHRASE_C
-  done
+  # send_prog "Initializing ${DEV}${CRYPTPARTITION} as crypt partition"
+  # echo -e "${GREEN}Type encryption passprhase${END}"
+  # read -sr PASSPHRASE
+  # export PASSPHRASE
+  # echo -e "${GREEN}Type passprhase again${END}"
+  # read -sr PASSPHRASE_C
+  # export PASSPHRASE_C
+  # while [[ "${PASSPHRASE}" != "${PASSPHRASE_C}" ]]; do
+  #   echo -e "${RED}Passphrases did not match, try again${END}"
+  #   read -sr PASSPHRASE
+  #   export PASSPHRASE
+  #   echo -e "${GREEN}Type passprhase again${END}"
+  #   read -sr PASSPHRASE_C
+  #   export PASSPHRASE_C
+  # done
   send_prog "Initializing ${DEV}${CRYPTPARTITION} as crypt partition"
   if [[ "${ISEFI}" -eq 1 ]]; then
-    printf %s "${PASSPHRASE}" | cryptsetup luksFormat --iter-time "${ITERTIME}" --key-file - --batch-mode "${DEV}${CRYPTPARTITION}"
+    printf %s "${PASSPHRASE}" | cryptsetup luksFormat --iter-time "${ITERTIME}" --key-file - --batch-mode "${DEV}${CRYPTPARTITION}" >/dev/null 2>&1
   else
-    printf %s "${PASSPHRASE}" | cryptsetup luksFormat --iter-time "${ITERTIME}" --type=luks1 --key-file - --batch-mode "${DEV}${CRYPTPARTITION}"
+    printf %s "${PASSPHRASE}" | cryptsetup luksFormat --iter-time "${ITERTIME}" --type=luks1 --key-file - --batch-mode "${DEV}${CRYPTPARTITION}" >/dev/null 2>&1
   fi
   send_prog "Opening crypt partition ${DEV}${CRYPTPARTITION} as ${CRYPTNAME}"
-  printf %s "${PASSPHRASE}" | cryptsetup open -d - "${DEV}${CRYPTPARTITION}" "${CRYPTNAME}"
+  printf %s "${PASSPHRASE}" | cryptsetup open -d - "${DEV}${CRYPTPARTITION}" "${CRYPTNAME}" >/dev/null 2>&1
   send_prog "Creating physical volume on ${CRYPTNAME}"
-  if ! pvcreate "/dev/mapper/${CRYPTNAME}" ; then return 1 ; fi
+  if ! pvcreate "/dev/mapper/${CRYPTNAME}" >/dev/null 2>&1; then return 1 ; fi
   send_prog "Creating volume group ${VGNAME}"
-  if ! vgcreate "${VGNAME}" "/dev/mapper/${CRYPTNAME}" ; then return 1 ; fi
+  if ! vgcreate "${VGNAME}" "/dev/mapper/${CRYPTNAME}" >/dev/null 2>&1; then return 1 ; fi
   send_prog "Creating logical volume for root  :  ${LVROOTNAME}"
-  if ! lvcreate -n "${LVROOTNAME}" -L "${LVROOTSIZE}" "${VGNAME}" ; then return 1 ; fi
+  if ! lvcreate -n "${LVROOTNAME}" -L "${LVROOTSIZE}" "${VGNAME}" >/dev/null 2>&1; then return 1 ; fi
   send_prog "Creating logical volume for swap  :  ${LVSWAPNAME}"
-  if ! lvcreate -n "${LVSWAPNAME}" -L "${LVSWAPSIZE}" "${VGNAME}" ; then return 1 ; fi
+  if ! lvcreate -n "${LVSWAPNAME}" -L "${LVSWAPSIZE}" "${VGNAME}" >/dev/null 2>&1; then return 1 ; fi
   if [[ "${WANTSHOME}" -eq 1 ]]; then
     send_prog "Creating logical volume for home  :  ${LVHOMENAME}"
-    if ! lvcreate -n "${LVHOMENAME}" -l "${LVHOMESIZE}%FREE" "${VGNAME}" ; then return 1 ; fi
+    if ! lvcreate -n "${LVHOMENAME}" -l "${LVHOMESIZE}%FREE" "${VGNAME}" >/dev/null 2>&1; then return 1 ; fi
   fi
 }
 
 function luks_add_keyfile() {
   send_prog "Mounting ${KEYDEV} at ${KEYMOUNT}"
-  if ! mount "${KEYDEV}" "${KEYMOUNT}" ; then send_error "Mounting ${KEYDEV} at ${KEYMOUNT}" ; return 1 ; fi
+  if ! mount "${KEYDEV}" "${KEYMOUNT}" >/dev/null 2>&1; then send_error "Mounting ${KEYDEV} at ${KEYMOUNT}" ; return 1 ; fi
   if [[ ! -d "${KEYMOUNT}/${KEYDIR}" ]]; then
     send_prog "Creating directory ${KEYDIR} on ${KEYDEV}"
     mkdir -p "${KEYMOUNT}/${KEYDIR}"
@@ -205,24 +205,24 @@ function luks_add_keyfile() {
 
 function make_filesystem() {
   send_prog "Creating root filesystem"
-  if ! mkfs.ext4 -L root /dev/${VGNAME}/${LVROOTNAME} ; then send_error "Making root filesystem" ; return 1 ; fi
+  if ! mkfs.ext4 -L root "/dev/${VGNAME}/${LVROOTNAME}" >/dev/null 2>&1; then send_error "Making root filesystem" ; return 1 ; fi
   send_prog "Creating swap"
-  if ! mkswap -L swap /dev/${VGNAME}/${LVSWAPNAME} ; then send_error "Creating swap" ; return 1 ; fi
+  if ! mkswap -L swap "/dev/${VGNAME}/${LVSWAPNAME}" >/dev/null 2>&1; then send_error "Creating swap" ; return 1 ; fi
   if [[ "${WANTSHOME}" -eq 1 ]]; then
     send_prog "Creating home filesystem"
-    if ! mkfs.ext4 -L home /dev/${VGNAME}/${LVHOMENAME} ; then send_error "Making home filesystem" ; return 1 ; fi
+    if ! mkfs.ext4 -L home "/dev/${VGNAME}/${LVHOMENAME}" >/dev/null 2>&1; then send_error "Making home filesystem" ; return 1 ; fi
   fi
 }
 
 function reformat_key() {
   if [[ "${KEYFORMAT}" -eq 1 ]]; then
     send_prog "Reformating ${KEYDEV}"
-    if ! mkfs.vfat -F 32 -n "BOOT_KEY" "${KEYDEV}" ; then
+    if ! mkfs.vfat -F 32 -n "BOOT_KEY" "${KEYDEV}" >/dev/null 2>&1; then
       send_error "Reformatting ${KEYDEV}" ; return 1
     fi
   elif [[ "${KEYFORMAT}" =~ ^[2-4]$ ]]; then
     send_prog "Reformating ${KEYDEV}"
-    if ! mkfs.${KEYFSTYPE} -L "BOOT_KEY" "${KEYDEV}" ; then
+    if ! mkfs.${KEYFSTYPE} -L "BOOT_KEY" "${KEYDEV}" >/dev/null 2>&1; then
       send_error "Reformating ${KEYDEV}" ; return 1
     fi
   else
@@ -232,26 +232,26 @@ function reformat_key() {
 
 function mount_filesystem() {
   send_prog "Mounting root file system"
-  if ! mount /dev/${VGNAME}/${LVROOTNAME} ${TARGETMOUNTPOINT} ; then return 1 ; fi
+  if ! mount "/dev/${VGNAME}/${LVROOTNAME}" "${TARGETMOUNTPOINT}" ; then return 1 ; fi
   if [[ "${WANTSHOME}" -eq 1 ]]; then
     send_prog "Creating /home"
-    if ! mkdir -p ${TARGETMOUNTPOINT}/home ; then return 1 ; fi
+    if ! mkdir -p "${TARGETMOUNTPOINT}/home" ; then return 1 ; fi
     send_prog "Mounting /home"
-    if ! mount /dev/${VGNAME}/${LVHOMENAME} ${TARGETMOUNTPOINT}/home ; then return 1 ; fi
+    if ! mount "/dev/${VGNAME}/${LVHOMENAME}" "${TARGETMOUNTPOINT}/home" ; then return 1 ; fi
   fi
   if [[ "${ISEFI}" -eq 1 ]]; then
     send_prog "Creating /boot"
-    if ! mkdir -p ${TARGETMOUNTPOINT}/boot ; then return 1 ; fi
+    if ! mkdir -p "${TARGETMOUNTPOINT}/boot" ; then return 1 ; fi
     send_prog "Mounting /boot"
-    if ! mount ${DEV}${EFIPARTITION} ${TARGETMOUNTPOINT}/boot ; then return 1 ; fi
+    if ! mount "${DEV}${EFIPARTITION}" "${TARGETMOUNTPOINT}/boot" ; then return 1 ; fi
   fi
   send_prog "Turning swap on"
-  if ! swapon /dev/${VGNAME}/${LVSWAPNAME} ; then return 1 ; fi
+  if ! swapon "/dev/${VGNAME}/${LVSWAPNAME}" ; then return 1 ; fi
 }
 
 function install_base_system() {
   send_prog "Sorting pacman mirrors via reflector"
-  reflector --latest 5 --country "United States" --sort rate --save /etc/pacman.d/mirrorlist --protocol https --download-timeout 15
+  reflector --latest 5 --country "United States" --sort rate --save /etc/pacman.d/mirrorlist --protocol https --download-timeout 15 >/dev/null 2>&1
   send_prog "Installing system to ${DEV}${CRYPTPARTITION}"
   pacstrap ${TARGETMOUNTPOINT} ${PACKAGELIST}
   send_prog "Generating fstab"
@@ -261,8 +261,8 @@ function install_base_system() {
 function enable_multilib() {
   if [[ $MULTILIB == "1" ]]; then
     send_prog "Enabling multilib repository"
-    cp ${TARGETMOUNTPOINT}/etc/pacman.conf ${TARGETMOUNTPOINT}/etc/pacman.conf.backup
-    sed -i -e 's/\#\[multilib\]/\[multilib\]/' -e '/^\[multilib\]/,+1 s/\#//' ${TARGETMOUNTPOINT}/etc/pacman.conf
+    cp "${TARGETMOUNTPOINT}/etc/pacman.conf" "${TARGETMOUNTPOINT}/etc/pacman.conf.backup"
+    sed -i -e 's/\#\[multilib\]/\[multilib\]/' -e '/^\[multilib\]/,+1 s/\#//' "${TARGETMOUNTPOINT}/etc/pacman.conf"
     return 0
   else
     send_prog "Multilib will not be enabled"
@@ -306,7 +306,7 @@ function chroot_prep() {
 
 function chroot_install() {
   send_prog "Chrooting into ${TARGETMOUNTPOINT}"
-cat <<- HEREDOC | arch-chroot ${TARGETMOUNTPOINT}
+cat <<- HEREDOC | arch-chroot "${TARGETMOUNTPOINT}"
 ln -sf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
 systemctl enable NetworkManager
 systemctl enable cups.service
@@ -314,21 +314,21 @@ systemctl enable avahi-daemon
 systemctl enable reflector.service
 systemctl enable reflector.timer
 systemctl enable acpid
-mkinitcpio -p linux
+mkinitcpio -p linux >/dev/null 2>&1
 hwclock --systohc
 locale-gen
 echo "root:${ROOTPASS}" | chpasswd
 HEREDOC
   if [[ "${ISEFI}" -eq 1 ]]; then
     send_prog "Installing GRUB"
-    cat <<- HEREDOC | arch-chroot ${TARGETMOUNTPOINT}
+    cat <<- HEREDOC | arch-chroot "${TARGETMOUNTPOINT}"
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id="ARCH_GRUB"
 grub-mkconfig -o /boot/grub/grub.cfg
 HEREDOC
   else
     send_prog "Installing GRUB"
     cat <<- HEREDOC | arch-chroot ${TARGETMOUNTPOINT}
-grub-install --target=i386-pc --bootloader-id="ARCH_GRUB" ${DEV}
+grub-install --target=i386-pc --bootloader-id="ARCH_GRUB" "${DEV}"
 grub-mkconfig -o /boot/grub/grub.cfg
 HEREDOC
   fi
@@ -468,6 +468,26 @@ This script will erase all the data on the install target${END}
     export ISEFI=0
     export CRYPTPARTITION=1
   fi
+
+  # LUKS passphrase prompt
+  while [[ -z "${PASSPHRASE}" ]]; do
+    clear
+    echo -e "${GREEN}Type LUKS encryption passprhase${END}"
+    read -sr PASSPHRASE
+    export PASSPHRASE
+    echo -e "${GREEN}Type LUKS passprhase again${END}"
+    read -sr PASSPHRASE_C
+    export PASSPHRASE_C
+    while [[ "${PASSPHRASE}" != "${PASSPHRASE_C}" ]]; do
+      clear
+      echo -e "${RED}Passphrases did not match, try again${END}"
+      read -sr PASSPHRASE
+      export PASSPHRASE
+      echo -e "${GREEN}Type passprhase again${END}"
+      read -sr PASSPHRASE_C
+      export PASSPHRASE_C
+    done
+  done
 
   # DEV prompt
   while [[ -z "${DEV}" ]] || [[ ! -e "${DEV}" ]] || ! echo "${DEV}" | grep -q -v "[0-9]$" ; do
@@ -612,7 +632,7 @@ Do not include spaces, special characters, or a minus"
   # ROOTPASS prompt
   while [[ -z "${ROOTPASS}" ]] ; do
     clear
-   echo -e "${GREEN}Please specify your root password for your new system${END}"
+    echo -e "${GREEN}Please specify your root password for your new system${END}"
     read -sr ROOTPASS
     export ROOTPASS
     echo -e "${GREEN}Type password again${END}"
