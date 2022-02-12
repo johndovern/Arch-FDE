@@ -1,4 +1,4 @@
-# FDE-Arch
+# Arch-FDE
 fde-install is bash script for Arch Linux that will give the user an installion
 with full disk encryption (FDE) via LVM on LUKS. This is inspired by and ripped
 off from Seiichi "Suikan" Horie's kaiten-yaki script to install ubuntu and void
@@ -9,17 +9,17 @@ linux with full disk encryption. His script can be found
 Booted from a live iso, either in a vm or on bare metal, after establishing an
 internet connection run the following:
 ```bash
-curl -O https://raw.githubusercontent.com/johndovern/FDE-Arch/master/fde-install
+curl -O https://raw.githubusercontent.com/johndovern/Arch-FDE/master/fde-install
 bash fde-install
 # required if you plan to use the -c flag
-curl -O https://raw.githubusercontent.com/johndovern/FDE-Arch/master/fde-config
+curl -O https://raw.githubusercontent.com/johndovern/Arch-FDE/master/fde-config
 bash fde-install -c
 ```
 By running `bash fde-install` the user will then be greeted with a series of
 prompts to set things like the target installation disk, their hostname, root
 partition size, and several other settings. All settings and brief explanations
 of them can be found in
-[fde-config.](https://github.com/johndovern/FDE-Arch/blob/master/fde-config)
+[fde-config.](https://github.com/johndovern/Arch-FDE/blob/master/fde-config)
 After the prompt phase users can review their settings. If they messed up or
 changed their mind they can choose which settings to reset. Once the user is
 satisfied with their settings the installation process will begin. Once the
