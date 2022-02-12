@@ -15,7 +15,7 @@ bash fde-install
 curl -O https://raw.githubusercontent.com/johndovern/FDE-Arch/master/fde-config
 bash fde-install -c
 ```
-By running `./fde-install` the user will then be greeted with a series of
+By running `bash fde-install` the user will then be greeted with a series of
 prompts to set things like the target installation disk, their hostname, root
 partition size, and several other settings. All settings and brief explanations
 of them can be found in
