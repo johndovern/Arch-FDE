@@ -278,7 +278,7 @@ function configure_grub_and_hooks() {
   send_prog "Adding required hooks and modules to /etc/mkinitcpio.conf"
   sed -i -e '/^HOOKS=/c HOOKS=(base udev autodetect keyboard keymap modconf block encrypt lvm2 filesystems fsck)' "${TARGETMOUNTPOINT}/etc/mkinitcpio.conf"
   if [[ "${ISEFI}" -eq 0 ]]; then
-    sed -i '/^#GRUB_ENABLE_CRYPTODISK=y$/c GRUB_ENABLE_CRYPTODISK=y'
+    sed -i '/^#GRUB_ENABLE_CRYPTODISK=y$/c GRUB_ENABLE_CRYPTODISK=y' "${TARGETMOUNTPOINT}/etc/default/grub"
   fi
 }
 
