@@ -114,7 +114,6 @@ function format_dev() {
     # UEFI
     if [[  "${ISEFI}" -eq 1 ]] ; then
       send_prog "Initializing ${DEV} with GPT"
-      # echo -e "${GREEN}...Initializing ${DEV} with GPT${END}"
       sgdisk --zap-all "${DEV}"
       if is_error ; then
         send_prog "Retrying initialization"
@@ -243,6 +242,8 @@ function mount_filesystem() {
 }
 
 function install_base_system() {
+  send_prog "Enabling parallel downloads"
+  sed -i 's/^#ParallelDownloads/ParallelDownloads/' "/etc/pacman.conf"
   send_prog "Sorting pacman mirrors via reflector"
   reflector --latest 5 --country "United States" --sort rate --save /etc/pacman.d/mirrorlist --protocol https --download-timeout 15 >/dev/null 2>&1
   send_prog "Installing system to ${DEV}${CRYPTPARTITION}"
