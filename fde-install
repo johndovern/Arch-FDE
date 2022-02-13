@@ -246,7 +246,7 @@ function install_base_system() {
   send_prog "Sorting pacman mirrors via reflector"
   reflector --latest 5 --country "United States" --sort rate --save /etc/pacman.d/mirrorlist --protocol https --download-timeout 15 >/dev/null 2>&1
   send_prog "Installing system to ${DEV}${CRYPTPARTITION}"
-  pacstrap "${TARGETMOUNTPOINT}" "${PACKAGELIST}"
+  pacstrap "${TARGETMOUNTPOINT}" ${PACKAGELIST}
   send_prog "Generating fstab"
   genfstab -U "${TARGETMOUNTPOINT}" >> "${TARGETMOUNTPOINT}/etc/fstab"
 }
