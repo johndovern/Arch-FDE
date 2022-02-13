@@ -969,6 +969,7 @@ https://github.com/johndovern/FDE-Arch"
       if ! reformat_key ; then
         send_error "Failed to reformat ${KEYDEV} to ${KEYFSTYPE}"
         close_and_unmount
+        return 1
       fi
     fi
     if ! luks_add_keyfile ; then
@@ -1005,6 +1006,7 @@ https://github.com/johndovern/FDE-Arch"
   if ! chroot_prep ; then
     send_error "Failed to prep for chroot"
     close_and_unmount
+    return 1
   fi
 
   if ! configure_grub_and_hooks ; then
@@ -1016,6 +1018,7 @@ https://github.com/johndovern/FDE-Arch"
   if ! chroot_install ; then
     send_error "Failed to chroot and install system"
     close_and_unmount
+    return 1
   fi
 
   echo -e "${GREEN}Encrypted installation completed successfully. Enjoy your new system!${END}"
