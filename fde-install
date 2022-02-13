@@ -477,6 +477,26 @@ This script will erase all the data on the install target${END}
     done
   done
 
+  # ROOTPASS prompt
+  while [[ -z "${ROOTPASS}" ]] ; do
+    clear
+    echo -e "${GREEN}Please specify your root password for your new system${END}"
+    read -sr ROOTPASS
+    export ROOTPASS
+    echo -e "${GREEN}Type password again${END}"
+    read -sr ROOTPASS_C
+    export ROOTPASS_C
+    while [[ "${ROOTPASS}" != "${ROOTPASS_C}" ]]; do
+      clear
+      echo -e "${RED}Passphrases did not match, try again${END}"
+      read -sr ROOTPASS
+      export ROOTPASS
+      echo -e "${GREEN}Type passprhase again${END}"
+      read -sr ROOTPASS_C
+      export ROOTPASS_C
+    done
+  done
+
   # DEV prompt
   while [[ -z "${DEV}" ]] || [[ ! -e "${DEV}" ]] || ! echo "${DEV}" | grep -q -v "[0-9]$" ; do
     clear
@@ -488,6 +508,19 @@ i.e. ${GREEN}/dev/sda${END} and not ${RED}/dev/sda1${END}"
     export DEV
   done
 
+  # TARGETMOUNTPOINT prompt
+  while [[ -z "${TARGETMOUNTPOINT}" ]] || ! echo "${TARGETMOUNTPOINT}" | grep -q "^/" || grep -sq " ${TARGETMOUNTPOINT}" /proc/mounts || echo "${TARGETMOUNTPOINT}" | grep -q "${GREPTEST}"; do
+    clear
+      if [[ -n "${TARGETMOUNTPOINT}" ]] && grep -sq " ${TARGETMOUNTPOINT}" /proc/mounts ; then
+        echo -e "${RED}The given directory is occupied. Please select a free mount point.${END}"
+      fi
+    echo -e "${GREEN}\
+Please specify a mount point for /dev/${VGNAME}/${LVROOTNAME}${END}
+If the directory does not exist, it will be created"
+    read -rp "Target mount point: " TARGETMOUNTPOINT
+    export TARGETMOUNTPOINT
+  done
+
   # CRYPTNAME prompt
   while [[ -z "${CRYPTNAME}" ]] || echo "${CRYPTNAME}" | grep -q "${GREPTEST}" ; do
     clear
@@ -496,6 +529,16 @@ Please choose a sane name for your encrypted drive i.e. arch-crypt${END}
 Do not include spaces, or special characters"
     read -rp "Crypt name: " CRYPTNAME
     export CRYPTNAME
+  done
+
+  # NEWHOSTNAME prompt
+  while [[ -z "${NEWHOSTNAME}" ]] || echo "${NEWHOSTNAME}" | grep -q "${GREPTEST}"; do
+    clear
+    echo -e "${GREEN}\
+Please specify the hostname of the new system${END}
+Do not include spaces, or special characters"
+    read -rp "New hostname: " NEWHOSTNAME
+    export NEWHOSTNAME
   done
 
   # VGNAME prompt
@@ -596,49 +639,6 @@ Must end with an \"${RED}M${END}\", or \"${RED}G${END}\""
     done
   fi
 
-  # TARGETMOUNTPOINT prompt
-  while [[ -z "${TARGETMOUNTPOINT}" ]] || ! echo "${TARGETMOUNTPOINT}" | grep -q "^/" || grep -sq " ${TARGETMOUNTPOINT}" /proc/mounts || echo "${TARGETMOUNTPOINT}" | grep -q "${GREPTEST}"; do
-    clear
-      if [[ -n "${TARGETMOUNTPOINT}" ]] && grep -sq " ${TARGETMOUNTPOINT}" /proc/mounts ; then
-        echo -e "${RED}The given directory is occupied. Please select a free mount point.${END}"
-      fi
-    echo -e "${GREEN}\
-Please specify a mount point for /dev/${VGNAME}/${LVROOTNAME}${END}
-If the directory does not exist, it will be created"
-    read -rp "Target mount point: " TARGETMOUNTPOINT
-    export TARGETMOUNTPOINT
-  done
-
-  # NEWHOSTNAME prompt
-  while [[ -z "${NEWHOSTNAME}" ]] || echo "${NEWHOSTNAME}" | grep -q "${GREPTEST}"; do
-    clear
-    echo -e "${GREEN}\
-Please specify the hostname of the new system${END}
-Do not include spaces, or special characters"
-    read -rp "New hostname: " NEWHOSTNAME
-    export NEWHOSTNAME
-  done
-
-  # ROOTPASS prompt
-  while [[ -z "${ROOTPASS}" ]] ; do
-    clear
-    echo -e "${GREEN}Please specify your root password for your new system${END}"
-    read -sr ROOTPASS
-    export ROOTPASS
-    echo -e "${GREEN}Type password again${END}"
-    read -sr ROOTPASS_C
-    export ROOTPASS_C
-    while [[ "${ROOTPASS}" != "${ROOTPASS_C}" ]]; do
-      clear
-      echo -e "${RED}Passphrases did not match, try again${END}"
-      read -sr ROOTPASS
-      export ROOTPASS
-      echo -e "${GREEN}Type passprhase again${END}"
-      read -sr ROOTPASS_C
-      export ROOTPASS_C
-    done
-  done
-
   # MULTILIB prompt
   while [[ -z "${MULTILIB}" ]] || [[ ! "${MULTILIB}" =~ ^[0-1]$ ]] ; do
     clear
@@ -697,10 +697,41 @@ Choose an external drive and not ${DEV}"
     export KEYDEV
   done
 
+  # KEYNAME prompt
+  while [[ -z "${UKEYNAME}" ]] || echo "${UKEYNAME}" | grep -q "${GREPTEST}\|\.key" || [[ -z "${KEYNAME}" ]]; do
+    clear
+    echo -e "${GREEN}Please enter a reasonable name for your keyfile${END}\nDo not include the \"${RED}.key${END}\" extension in the name."
+    read -rp "Keyname: " UKEYNAME
+    export KEYNAME="${UKEYNAME}.key"
+  done
+
+  # KEYMOUNT prompt
+  while [[ -z "${KEYMOUNT}" ]] || grep -sq " ${KEYMOUNT}" /proc/mounts || ! echo "${KEYMOUNT}" | grep -q "^/" || [[ "$TARGETMOUNTPOINT" == "$KEYMOUNT" ]] || echo "${KEYMOUNT}" | grep -q "${GREPTEST}\|^${TARGETMOUNTPOINT}" ; do
+    clear
+    if [[ -n "${KEYMOUNT}" ]] && grep -sq " ${KEYMOUNT}" /proc/mounts ; then
+      echo -e "${RED}The given directory is occupied. Please select a free mount point.${END}"
+    fi
+    echo -e "${GREEN}Please specify a directory, starting at root${END} \"${RED}/${END}\" ${GREEN}to mount ${KEYDEV}.${END}
+/dev/${VGNAME}/${LVROOTNAME} will be mounted at ${TARGETMOUNTPOINT}"
+    read -rp "Mount at: " KEYMOUNT
+    export KEYMOUNT
+  done
+
+  # KEYDIR prompt
+  while [[ -z "${KEYDIR}" ]] || ! echo "${KEYDIR}" | grep -q "^/" || echo "${KEYDIR}" | grep -q "${GREPTEST}"; do
+    clear
+    echo -e "${GREEN}Please specify a directory on ${KEYDEV} to store your keyfile.${END}
+If the directory does not exist it will be created.
+If ${KEYNAME} exists in this directory then it will
+be used to encrypt ${DEV}${CRYPTPARTITION}"
+    read -rp "Keyfile directory: " KEYDIR
+    export KEYDIR
+  done
+
   # KEYFORMAT prompt
-    while [[ -z "${KEYFORMAT}" ]] || [[ ! "${KEYFORMAT}" =~ ^[0-4]$ ]]; do
-      clear
-      echo -e "${GREEN}\
+  while [[ -z "${KEYFORMAT}" ]] || [[ ! "${KEYFORMAT}" =~ ^[0-4]$ ]]; do
+    clear
+    echo -e "${GREEN}\
 Detected ${KEYDEV} filesystem as  :  $(lsblk -dno FSTYPE ${KEYDEV})${END}
 Would you like to reformat to another filesystem?
 0  :  Do not reformat ${KEYDEV}
@@ -709,53 +740,22 @@ Would you like to reformat to another filesystem?
 2  :  btrfs
 3  :  ext4
 4  :  xfs"
-      read -rp "Format ${KEYDEV} ? " KEYFORMAT
-      export KEYFORMAT
-    done
+    read -rp "Format ${KEYDEV} ? " KEYFORMAT
+    export KEYFORMAT
+  done
 
-    # Format Key based on selection
-    if [[ "$KEYFORMAT" =~ ^[1-4]$ ]] ; then
-      case "$KEYFORMAT" in
-        "1") export KEYFSTYPE="vfat" ; export KEYFLAG= ;;
-        "2") export KEYFSTYPE="btrfs" ; export KEYFLAG="-f" ;;
-        "3") export KEYFSTYPE="ext4" ; export KEYFLAG="-F" ;;
-        "4") export KEYFSTYPE="xfs" ; export KEYFLAG="-f" ;;
-        *) ;;
-      esac
-    fi
+  # Format Key based on selection
+  if [[ "$KEYFORMAT" =~ ^[1-4]$ ]] ; then
+    case "$KEYFORMAT" in
+      "1") export KEYFSTYPE="vfat" ; export KEYFLAG= ;;
+      "2") export KEYFSTYPE="btrfs" ; export KEYFLAG="-f" ;;
+      "3") export KEYFSTYPE="ext4" ; export KEYFLAG="-F" ;;
+      "4") export KEYFSTYPE="xfs" ; export KEYFLAG="-f" ;;
+      *) ;;
+    esac
+  fi
 
-  # KEYNAME prompt
-    while [[ -z "${UKEYNAME}" ]] || echo "${UKEYNAME}" | grep -q "${GREPTEST}\|\.key" || [[ -z "${KEYNAME}" ]]; do
-      clear
-      echo -e "${GREEN}Please enter a reasonable name for your keyfile${END}\nDo not include the \"${RED}.key${END}\" extension in the name."
-      read -rp "Keyname: " UKEYNAME
-      export KEYNAME="${UKEYNAME}.key"
-    done
-
-  # KEYMOUNT prompt
-    while [[ -z "${KEYMOUNT}" ]] || grep -sq " ${KEYMOUNT}" /proc/mounts || ! echo "${KEYMOUNT}" | grep -q "^/" || [[ "$TARGETMOUNTPOINT" == "$KEYMOUNT" ]] || echo "${KEYMOUNT}" | grep -q "${GREPTEST}\|^${TARGETMOUNTPOINT}" ; do
-      clear
-      if [[ -n "${KEYMOUNT}" ]] && grep -sq " ${KEYMOUNT}" /proc/mounts ; then
-        echo -e "${RED}The given directory is occupied. Please select a free mount point.${END}"
-      fi
-      echo -e "${GREEN}Please specify a directory, starting at root${END} \"${RED}/${END}\" ${GREEN}to mount ${KEYDEV}.${END}
-/dev/${VGNAME}/${LVROOTNAME} will be mounted at ${TARGETMOUNTPOINT}"
-      read -rp "Mount at: " KEYMOUNT
-      export KEYMOUNT
-    done
-
-  # KEYDIR prompt
-    while [[ -z "${KEYDIR}" ]] || ! echo "${KEYDIR}" | grep -q "^/" || echo "${KEYDIR}" | grep -q "${GREPTEST}"; do
-      clear
-      echo -e "${GREEN}Please specify a directory on ${KEYDEV} to store your keyfile.${END}
-If the directory does not exist it will be created.
-If ${KEYNAME} exists in this directory then it will
-be used to encrypt ${DEV}${CRYPTPARTITION}"
-      read -rp "Keyfile directory: " KEYDIR
-      export KEYDIR
-    done
-
-    export KEYPATH="${KEYDIR}/${KEYNAME}"
+  export KEYPATH="${KEYDIR}/${KEYNAME}"
 }
 
 function system_var_check() {
