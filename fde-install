@@ -491,7 +491,9 @@ i.e. ${GREEN}/dev/sda${END} and not ${RED}/dev/sda1${END}"
   # CRYPTNAME prompt
   while [[ -z "${CRYPTNAME}" ]] || echo "${CRYPTNAME}" | grep -q "${GREPTEST}" ; do
     clear
-    echo -e "${GREEN}Please choose a sane name for your encrypted drive i.e. arch-crypt${END}"
+    echo -e "${GREEN}\
+Please choose a sane name for your encrypted drive i.e. arch-crypt${END}
+Do not include spaces, or special characters"
     read -rp "Crypt name: " CRYPTNAME
     export CRYPTNAME
   done
