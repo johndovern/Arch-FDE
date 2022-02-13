@@ -715,7 +715,7 @@ Choose an external drive and not ${DEV}"
     if [[ -n "${KEYMOUNT}" ]] && grep -sq " ${KEYMOUNT}" /proc/mounts ; then
       echo -e "${RED}The given directory is occupied. Please select a free mount point.${END}"
     fi
-    echo -e "${GREEN}Please specify a directory, starting at root${END} \"${RED}/${END}\" ${GREEN}to mount ${KEYDEV}.${END}
+    echo -e "${GREEN}Please specify the directory, starting at root${END} \"${RED}/${END}\" ${GREEN}to mount ${KEYDEV}.${END}
 /dev/${VGNAME}/${LVROOTNAME} will be mounted at ${TARGETMOUNTPOINT}"
     read -rp "Mount at: " KEYMOUNT
     export KEYMOUNT
@@ -724,7 +724,7 @@ Choose an external drive and not ${DEV}"
   # KEYDIR prompt
   while [[ -z "${KEYDIR}" ]] || ! echo "${KEYDIR}" | grep -q "^/" || echo "${KEYDIR}" | grep -q "${GREPTEST}"; do
     clear
-    echo -e "${GREEN}Please specify a directory on ${KEYDEV} to store your keyfile.${END}
+    echo -e "${GREEN}Please specify the directory on ${KEYDEV} to store your keyfile.${END}
 If the directory does not exist it will be created.
 If ${KEYNAME} exists in this directory then it will
 be used to encrypt ${DEV}${CRYPTPARTITION}"
