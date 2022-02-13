@@ -1018,12 +1018,6 @@ https://github.com/johndovern/FDE-Arch"
     return 1
   fi
 
-  # if ! configure_grub_and_hooks ; then
-  #   send_error "Failed to configure grub and mkinitcpo hooks"
-  #   close_and_unmount
-  #   return 1
-  # fi
-
   if ! chroot_config ; then
     send_error "Failed to chroot and install system"
     close_and_unmount
