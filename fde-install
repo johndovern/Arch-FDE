@@ -116,7 +116,11 @@ function format_dev() {
       send_prog "Initializing ${DEV} with GPT"
       # echo -e "${GREEN}...Initializing ${DEV} with GPT${END}"
       sgdisk --zap-all "${DEV}"
-      if is_error ; then return 1 ; fi
+      if is_error ; then
+        send_prog "Retrying initialization"
+        sgdisk --zap-all "${DEV}"
+        if is_error ; then return 1 ; fi
+      fi
       send_prog "Creating an EFI partition on ${DEV}"
       sgdisk --new="${EFIPARTITION}":0:+"${EFISIZE}" --change-name="${EFIPARTITION}":"EFI System"  --typecode="${EFIPARTITION}":ef00 "${DEV}"
       if is_error ; then return 1 ; fi
