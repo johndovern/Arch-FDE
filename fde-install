@@ -297,7 +297,7 @@ function configure_grub_and_hooks() {
   fi
 }
 
-function chroot_install() {
+function chroot_config() {
   send_prog "Chrooting into ${TARGETMOUNTPOINT}"
 cat <<- HEREDOC | arch-chroot "${TARGETMOUNTPOINT}"
 ln -sf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
@@ -307,20 +307,25 @@ systemctl enable avahi-daemon
 systemctl enable reflector.service
 systemctl enable reflector.timer
 systemctl enable acpid
-mkinitcpio -p linux >/dev/null 2>&1
 hwclock --systohc
 locale-gen
 echo "root:${ROOTPASS}" | chpasswd
 HEREDOC
+  if ! configure_grub_and_hooks ; then
+    send_error "Failed to configure grub and mkinitcpo hooks"
+    return 1
+  fi
   if [[ "${ISEFI}" -eq 1 ]]; then
     send_prog "Installing GRUB"
     cat <<- HEREDOC | arch-chroot "${TARGETMOUNTPOINT}"
+mkinitcpio -p linux >/dev/null 2>&1
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id="ARCH_GRUB"
 grub-mkconfig -o /boot/grub/grub.cfg
 HEREDOC
   else
     send_prog "Installing GRUB"
     cat <<- HEREDOC | arch-chroot ${TARGETMOUNTPOINT}
+mkinitcpio -p linux >/dev/null 2>&1
 grub-install --target=i386-pc --bootloader-id="ARCH_GRUB" "${DEV}"
 grub-mkconfig -o /boot/grub/grub.cfg
 HEREDOC
@@ -1010,13 +1015,13 @@ https://github.com/johndovern/FDE-Arch"
     return 1
   fi
 
-  if ! configure_grub_and_hooks ; then
-    send_error "Failed to configure grub and mkinitcpo hooks"
-    close_and_unmount
-    return 1
-  fi
+  # if ! configure_grub_and_hooks ; then
+  #   send_error "Failed to configure grub and mkinitcpo hooks"
+  #   close_and_unmount
+  #   return 1
+  # fi
 
-  if ! chroot_install ; then
+  if ! chroot_config ; then
     send_error "Failed to chroot and install system"
     close_and_unmount
     return 1
