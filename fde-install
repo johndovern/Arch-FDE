@@ -121,7 +121,7 @@ function format_dev() {
       sgdisk --new="${EFIPARTITION}":0:+"${EFISIZE}" --change-name="${EFIPARTITION}":"EFI System"  --typecode="${EFIPARTITION}":ef00 "${DEV}"
       if is_error ; then return 1 ; fi
       send_prog "Creating boot filesystem"
-      if ! mkfs.vfat -n boot ${DEV}${EFIPARTITION} ; then send_error "Making boot filesystem" ; return 1 ; fi
+      if ! mkfs.vfat -n boot "${DEV}${EFIPARTITION}" ; then send_error "Making boot filesystem" ; return 1 ; fi
       send_prog "Creating a Linux partition on ${DEV}"
       sgdisk --new="${CRYPTPARTITION}":0:0    --change-name="${CRYPTPARTITION}":"Linux LUKS" --typecode="${CRYPTPARTITION}":8309 "${DEV}"
       if is_error ; then return 1 ; fi
@@ -140,21 +140,6 @@ HEREDOC
 }
 
 function encrypt_dev() {
-  # send_prog "Initializing ${DEV}${CRYPTPARTITION} as crypt partition"
-  # echo -e "${GREEN}Type encryption passprhase${END}"
-  # read -sr PASSPHRASE
-  # export PASSPHRASE
-  # echo -e "${GREEN}Type passprhase again${END}"
-  # read -sr PASSPHRASE_C
-  # export PASSPHRASE_C
-  # while [[ "${PASSPHRASE}" != "${PASSPHRASE_C}" ]]; do
-  #   echo -e "${RED}Passphrases did not match, try again${END}"
-  #   read -sr PASSPHRASE
-  #   export PASSPHRASE
-  #   echo -e "${GREEN}Type passprhase again${END}"
-  #   read -sr PASSPHRASE_C
-  #   export PASSPHRASE_C
-  # done
   send_prog "Initializing ${DEV}${CRYPTPARTITION} as crypt partition"
   if [[ "${ISEFI}" -eq 1 ]]; then
     printf %s "${PASSPHRASE}" | cryptsetup luksFormat --iter-time "${ITERTIME}" --key-file - --batch-mode "${DEV}${CRYPTPARTITION}" >/dev/null 2>&1
@@ -177,7 +162,27 @@ function encrypt_dev() {
   fi
 }
 
+function reformat_key() {
+  if [[ "${KEYFORMAT}" -eq 1 ]]; then
+    send_prog "Reformating ${KEYDEV}"
+    if ! mkfs.vfat -F 32 -n "BOOT_KEY" "${KEYDEV}" >/dev/null 2>&1; then
+      send_error "Reformatting ${KEYDEV}" ; return 1
+    fi
+  elif [[ "${KEYFORMAT}" =~ ^[2-4]$ ]]; then
+    send_prog "Reformating ${KEYDEV}"
+    if ! mkfs."${KEYFSTYPE}" -L "BOOT_KEY" "${KEYDEV}" >/dev/null 2>&1; then
+      send_error "Reformating ${KEYDEV}" ; return 1
+    fi
+  else
+    send_error "With key format variable  :  ${KEYFORMAT}"
+  fi
+}
+
 function luks_add_keyfile() {
+  if [[ ! -d "${KEYMOUNT}" ]] && [[ "${WANTKEY}" -eq 1 ]] ; then
+    send_prog "Making direcotry ${KEYMOUNT}"
+    mkdir -p "${KEYMOUNT}"
+  fi
   send_prog "Mounting ${KEYDEV} at ${KEYMOUNT}"
   if ! mount "${KEYDEV}" "${KEYMOUNT}" >/dev/null 2>&1; then send_error "Mounting ${KEYDEV} at ${KEYMOUNT}" ; return 1 ; fi
   if [[ ! -d "${KEYMOUNT}/${KEYDIR}" ]]; then
@@ -195,7 +200,7 @@ function luks_add_keyfile() {
   else
     send_prog "${KEYNAME} already exists, skipping"
   fi
-  if ! chmod u=rx,go-rwx "${KEYMOUNT}"/"${KEYDIR}" ; then send_error "Chmoding ${KEYMOUNT}/${KEYDIR}" ; return 1 ; fi
+  if ! chmod u=rx,go-rwx "${KEYMOUNT}/${KEYDIR}" ; then send_error "Chmoding ${KEYMOUNT}/${KEYDIR}" ; return 1 ; fi
   if ! chmod u=r,go-rwx "${KEYMOUNT}""${KEYPATH}" ; then send_error "Chmoding ${KEYMOUNT}/${KEYPATH}" ; return 1 ; fi
   send_prog "Adding keyfile, ${KEYNAME}, to ${DEV}${CRYPTPARTITION}"
   printf %s "${PASSPHRASE}" | cryptsetup luksAddKey --iter-time "${ITERTIME}" -d - "${DEV}${CRYPTPARTITION}" "${KEYMOUNT}""${KEYPATH}"
@@ -211,22 +216,6 @@ function make_filesystem() {
   if [[ "${WANTSHOME}" -eq 1 ]]; then
     send_prog "Creating home filesystem"
     if ! mkfs.ext4 -L home "/dev/${VGNAME}/${LVHOMENAME}" >/dev/null 2>&1; then send_error "Making home filesystem" ; return 1 ; fi
-  fi
-}
-
-function reformat_key() {
-  if [[ "${KEYFORMAT}" -eq 1 ]]; then
-    send_prog "Reformating ${KEYDEV}"
-    if ! mkfs.vfat -F 32 -n "BOOT_KEY" "${KEYDEV}" >/dev/null 2>&1; then
-      send_error "Reformatting ${KEYDEV}" ; return 1
-    fi
-  elif [[ "${KEYFORMAT}" =~ ^[2-4]$ ]]; then
-    send_prog "Reformating ${KEYDEV}"
-    if ! mkfs.${KEYFSTYPE} -L "BOOT_KEY" "${KEYDEV}" >/dev/null 2>&1; then
-      send_error "Reformating ${KEYDEV}" ; return 1
-    fi
-  else
-    send_error "With key format variable  :  ${KEYFORMAT}"
   fi
 }
 
@@ -253,9 +242,9 @@ function install_base_system() {
   send_prog "Sorting pacman mirrors via reflector"
   reflector --latest 5 --country "United States" --sort rate --save /etc/pacman.d/mirrorlist --protocol https --download-timeout 15 >/dev/null 2>&1
   send_prog "Installing system to ${DEV}${CRYPTPARTITION}"
-  pacstrap ${TARGETMOUNTPOINT} ${PACKAGELIST}
+  pacstrap "${TARGETMOUNTPOINT}" "${PACKAGELIST}"
   send_prog "Generating fstab"
-  genfstab -U ${TARGETMOUNTPOINT} >> ${TARGETMOUNTPOINT}/etc/fstab
+  genfstab -U "${TARGETMOUNTPOINT}" >> "${TARGETMOUNTPOINT}/etc/fstab"
 }
 
 function enable_multilib() {
@@ -270,25 +259,7 @@ function enable_multilib() {
   fi
 }
 
-function configure_grub_and_hooks() {
-  if [[ "$WANTKEY" -eq 1 ]]; then
-    export CRYPTKEYGRUB=" cryptkey=UUID=$(lsblk -dno UUID ${KEYDEV}):$(lsblk -dno FSTYPE ${KEYDEV}):${KEYPATH}"
-    sed -e "/^MODULES=()$/c MODULES=($(lsblk -dno FSTYPE ${KEYDEV}))" "${TARGETMOUNTPOINT}/etc/mkinitcpio.conf"
-  else
-    export CRYPTKEYGRUB=""
-  fi
-  send_prog "Adding ${DEV}${CRYPTPARTITION} uuid to /etc/default/grub"
-  sed -i -e "/GRUB_CMDLINE_LINUX=/c GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$(lsblk -dno UUID ${DEV}${CRYPTPARTITION}):${CRYPTNAME}${SSDGRUB} root=/dev/mapper/${VGNAME}-${LVROOTNAME}${CRYPTKEYGRUB}\"" "${TARGETMOUNTPOINT}/etc/default/grub"
-  send_prog "Adding required hooks and modules to /etc/mkinitcpio.conf"
-  sed -i -e '/^HOOKS=/c HOOKS=(base udev autodetect keyboard keymap modconf block encrypt lvm2 filesystems fsck)' "${TARGETMOUNTPOINT}/etc/mkinitcpio.conf"
-  if [[ "${ISEFI}" -eq 0 ]]; then
-    sed -i '/^#GRUB_ENABLE_CRYPTODISK=y$/c GRUB_ENABLE_CRYPTODISK=y' "${TARGETMOUNTPOINT}/etc/default/grub"
-  fi
-}
-
 function chroot_prep() {
-  send_prog "Preparing chroot environment"
-  if ! cp -r "${PWD}" "${TARGETMOUNTPOINT}" ; then return 1 ; fi
   send_prog "Setting locale"
   sed -i 's/#en_US.UTF-8/en_US.UTF-8/' "${TARGETMOUNTPOINT}/etc/locale.gen"
   echo "LANG=en_US.UTF-8" > "${TARGETMOUNTPOINT}/etc/locale.conf"
@@ -302,6 +273,23 @@ function chroot_prep() {
   fi
   send_prog "Configuring pacman mirrorlist on ${DEV}"
   echo -e "--sort rate\n--latest 5\n--country \"United States\",Canada\n--save /etc/pacman.d/mirrorlist\n--protocol https\n--download-timeout 15\n--connection-timeout 15" > "${TARGETMOUNTPOINT}/etc/xdg/reflector/reflector.conf"
+}
+
+function configure_grub_and_hooks() {
+  if [[ "$WANTKEY" -eq 1 ]]; then
+    export CRYPTKEYGRUB=" cryptkey=UUID=$(lsblk -dno UUID ${KEYDEV}):$(lsblk -dno FSTYPE ${KEYDEV}):${KEYPATH}"
+    sed -i -e "/^MODULES=()$/c MODULES=($(lsblk -dno FSTYPE ${KEYDEV}))" "${TARGETMOUNTPOINT}/etc/mkinitcpio.conf"
+  else
+    export CRYPTKEYGRUB=""
+  fi
+  send_prog "Adding ${DEV}${CRYPTPARTITION} uuid to /etc/default/grub"
+  sed -i -e "/GRUB_CMDLINE_LINUX=/c GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$(lsblk -dno UUID ${DEV}${CRYPTPARTITION}):${CRYPTNAME}${SSDGRUB} root=/dev/mapper/${VGNAME}-${LVROOTNAME}${CRYPTKEYGRUB}\"" "${TARGETMOUNTPOINT}/etc/default/grub"
+  send_prog "Adding required hooks and modules to /etc/mkinitcpio.conf"
+  sed -i -e '/^HOOKS=/c HOOKS=(base udev autodetect keyboard keymap modconf block encrypt lvm2 filesystems fsck)' "${TARGETMOUNTPOINT}/etc/mkinitcpio.conf"
+  if [[ "${ISEFI}" -eq 0 ]]; then
+    send_prog "Enabling grub cryptodisk setting"
+    sed -i '/^#GRUB_ENABLE_CRYPTODISK=y$/c GRUB_ENABLE_CRYPTODISK=y' "${TARGETMOUNTPOINT}/etc/default/grub"
+  fi
 }
 
 function chroot_install() {
@@ -610,7 +598,7 @@ Must end with an \"${RED}M${END}\", or \"${RED}G${END}\""
   while [[ -z "${TARGETMOUNTPOINT}" ]] || ! echo "${TARGETMOUNTPOINT}" | grep -q "^/" || grep -sq " ${TARGETMOUNTPOINT}" /proc/mounts || echo "${TARGETMOUNTPOINT}" | grep -q "${GREPTEST}"; do
     clear
       if [[ -n "${TARGETMOUNTPOINT}" ]] && grep -sq " ${TARGETMOUNTPOINT}" /proc/mounts ; then
-        echo -e "${RED}The given location is occupied. Please select a free mount point.${END}"
+        echo -e "${RED}The given directory is occupied. Please select a free mount point.${END}"
       fi
     echo -e "${GREEN}\
 Please specify a mount point for /dev/${VGNAME}/${LVROOTNAME}${END}
@@ -624,7 +612,7 @@ If the directory does not exist, it will be created"
     clear
     echo -e "${GREEN}\
 Please specify the hostname of the new system${END}
-Do not include spaces, special characters, or a minus"
+Do not include spaces, or special characters"
     read -rp "New hostname: " NEWHOSTNAME
     export NEWHOSTNAME
   done
@@ -696,7 +684,7 @@ Would you like to use a keyfile on an external drive to unlock LUKS at boot?${EN
   if [[ "${WANTKEY}" -eq 0 ]]; then export KEYCHANGE=0 ; return 1 ; fi
 
   # KEYDEV prompt
-  while [[ ! -e "${KEYDEV}" ]] || [[ -z "${KEYDEV}" ]] || echo "${KEYDEV}" | grep -q "${DEV}" || ! echo "${KEYDEV}" | grep -q -E "*[0-9]+$" || echo "${KEYDEV}" | grep -q "${GREPTEST}"; do
+  while [[ ! -e "${KEYDEV}" ]] || [[ -z "${KEYDEV}" ]] || echo "${KEYDEV}" | grep -q "${DEV}" || ! echo "${KEYDEV}" | grep -q -E ".*[0-9]+$" || echo "${KEYDEV}" | grep -q "${GREPTEST}"; do
     clear
     lsblk
     echo -e "${GREEN}\
@@ -746,9 +734,9 @@ Would you like to reformat to another filesystem?
     while [[ -z "${KEYMOUNT}" ]] || grep -sq " ${KEYMOUNT}" /proc/mounts || ! echo "${KEYMOUNT}" | grep -q "^/" || [[ "$TARGETMOUNTPOINT" == "$KEYMOUNT" ]] || echo "${KEYMOUNT}" | grep -q "${GREPTEST}\|^${TARGETMOUNTPOINT}" ; do
       clear
       if [[ -n "${KEYMOUNT}" ]] && grep -sq " ${KEYMOUNT}" /proc/mounts ; then
-        echo -e "${RED}The given location is occupied. Please select a free mount point.${END}"
+        echo -e "${RED}The given directory is occupied. Please select a free mount point.${END}"
       fi
-      echo -e "${GREEN}Please specify a location, starting at root${END} \"${RED}/${END}\" ${GREEN}to mount your keyfile.${END}
+      echo -e "${GREEN}Please specify a directory, starting at root${END} \"${RED}/${END}\" ${GREEN}to mount ${KEYDEV}.${END}
 /dev/${VGNAME}/${LVROOTNAME} will be mounted at ${TARGETMOUNTPOINT}"
       read -rp "Mount at: " KEYMOUNT
       export KEYMOUNT
@@ -757,9 +745,9 @@ Would you like to reformat to another filesystem?
   # KEYDIR prompt
     while [[ -z "${KEYDIR}" ]] || ! echo "${KEYDIR}" | grep -q "^/" || echo "${KEYDIR}" | grep -q "${GREPTEST}"; do
       clear
-      echo -e "${GREEN}Please specify a location on ${KEYDEV} to store your keyfile.${END}
-If the location does not exist it will be created.
-If ${KEYNAME} exists at this location then it will
+      echo -e "${GREEN}Please specify a directory on ${KEYDEV} to store your keyfile.${END}
+If the directory does not exist it will be created.
+If ${KEYNAME} exists in this directory then it will
 be used to encrypt ${DEV}${CRYPTPARTITION}"
       read -rp "Keyfile directory: " KEYDIR
       export KEYDIR
@@ -774,16 +762,25 @@ function system_var_check() {
     echo -e "${GREEN}\
 Please review your new system settings${END}
 01 - Install device     :  ${DEV}
-02 - Crypt name         :  ${CRYPTNAME}
-03 - LV Group name      :  ${VGNAME}
-04 - LV Root name       :  ${LVROOTNAME}
-05 - LV Root size       :  ${LVROOTSIZE}
-06 - LV Swap name       :  ${LVSWAPNAME}
-07 - LV Swap size       :  ${LVSWAPSIZE}
-08 - LV Home name       :  ${LVHOMENAME}
-09 - LV Home size (%)   :  ${LVHOMESIZE}
-10 - Target mount       :  ${TARGETMOUNTPOINT}
-11 - System Hostname    :  ${NEWHOSTNAME}"
+02 - Target mount       :  ${TARGETMOUNTPOINT}
+03 - Crypt name         :  ${CRYPTNAME}
+04 - System Hostname    :  ${NEWHOSTNAME}
+05 - LV Group name      :  ${VGNAME}
+06 - LV Root name       :  ${LVROOTNAME}
+07 - LV Root size       :  ${LVROOTSIZE}
+08 - LV Swap name       :  ${LVSWAPNAME}
+09 - LV Swap size       :  ${LVSWAPSIZE}"
+    if [[ "${WANTSHOME}" -eq 1 ]]; then
+      echo -e "\
+10 - LV Home name       :  ${LVHOMENAME}
+11 - LV Home size (%)   :  ${LVHOMESIZE}"
+    elif [[ "${WANTSHOME}" -eq 0 ]]; then
+      echo -e "\
+10 - Home wanted        :  No"
+    elif [[ -z "${WANTSHOME}" ]]; then
+      echo -e "\
+10 - Home wanted        :  NULL"
+    fi
     if [[ "${MULTILIB}" -eq 1 ]]; then
       echo -e "\
 12 - Multilib enabled   :  Yes"
@@ -821,16 +818,21 @@ Leave blank or enter 0 when done"
     case "${ans}" in
       ""|"0") unset ans ; break ;;
       "01") export DEV=         ;;
-      "02") export CRYPTNAME=   ;;
-      "03") export VGNAME=      ;;
-      "04") export LVROOTNAME=  ;;
-      "05") export LVROOTSIZE=  ;;
-      "06") export LVSWAPNAME=  ;;
-      "07") export LVSWAPSIZE=  ;;
-      "08") export LVHOMENAME=  ;;
-      "09") export LVHOMESIZE=  ;;
-      "10") export TARGETMOUNTPOINT= ;;
-      "11") export NEWHOSTNAME= ;;
+      "02") export TARGETMOUNTPOINT= ;;
+      "03") export CRYPTNAME=   ;;
+      "04") export NEWHOSTNAME= ;;
+      "05") export VGNAME=      ;;
+      "06") export LVROOTNAME=  ;;
+      "07") export LVROOTSIZE=  ;;
+      "08") export LVSWAPNAME=  ;;
+      "09") export LVSWAPSIZE=  ;;
+      "10")
+        if [[ "${WANTSHOME}" -eq 0 ]]; then
+          export WANTSHOME=
+        elif [[ "${WANTSHOME}" -eq 1 ]]; then
+          export LVHOMENAME=
+        fi ;;
+      "11") export LVHOMESIZE=  ;;
       "12") export MULTILIB= ;;
       "13") export WANTSSDGRUB= ;;
       "14") export EFISIZE= ;;
@@ -921,8 +923,6 @@ https://github.com/johndovern/FDE-Arch"
     system_var_check
   done
 
-  if [[ ! -d "$TARGETMOUNTPOINT" ]]; then send_prog "Making direcotry ${TARGETMOUNTPOINT}" ; mkdir -p "${TARGETMOUNTPOINT}" ; fi
-
   while [[ -z "${KEYCHANGE}" ]] || [[ "${KEYCHANGE}" -eq 1 ]]; do
     export KEYCHANGE=
     if ! key_prompts ; then
@@ -944,7 +944,7 @@ https://github.com/johndovern/FDE-Arch"
     return 1
   fi
 
-  if [[ ! -d "$KEYMOUNT" ]] && [[ "${WANTKEY}" -eq 1 ]] ; then send_prog "Making direcotry ${KEYMOUNT}" ; mkdir -p "${KEYMOUNT}" ; fi
+  if [[ ! -d "${TARGETMOUNTPOINT}" ]]; then send_prog "Making direcotry ${TARGETMOUNTPOINT}" ; mkdir -p "${TARGETMOUNTPOINT}" ; fi
 
   if ! format_dev ; then
     send_error "Unable to format ${DEV}"
@@ -959,6 +959,12 @@ https://github.com/johndovern/FDE-Arch"
   fi
 
   if [[ "${WANTKEY}" -eq 1 ]]; then
+    if [[ "${KEYFORMAT}" -ne 0 ]]; then
+      if ! reformat_key ; then
+        send_error "Failed to reformat ${KEYDEV} to ${KEYFSTYPE}"
+        close_and_unmount
+      fi
+    fi
     if ! luks_add_keyfile ; then
       send_error "Failed to add a keyfile to ${DEV}${CRYPTPARTITION}"
       close_and_unmount
@@ -984,12 +990,6 @@ https://github.com/johndovern/FDE-Arch"
     return 1
   fi
 
-  if ! configure_grub_and_hooks ; then
-    send_error "Failed to configure grub and mkinitcpo hooks"
-    close_and_unmount
-    return 1
-  fi
-
   if ! enable_multilib ; then
     send_error "Failed to enable multilib repo"
     close_and_unmount
@@ -999,6 +999,12 @@ https://github.com/johndovern/FDE-Arch"
   if ! chroot_prep ; then
     send_error "Failed to prep for chroot"
     close_and_unmount
+  fi
+
+  if ! configure_grub_and_hooks ; then
+    send_error "Failed to configure grub and mkinitcpo hooks"
+    close_and_unmount
+    return 1
   fi
 
   if ! chroot_install ; then
