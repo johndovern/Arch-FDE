@@ -166,12 +166,12 @@ function reformat_key() {
   if [[ "${KEYFORMAT}" -eq 1 ]]; then
     send_prog "Reformating ${KEYDEV}"
     if ! mkfs.vfat -F 32 -n "BOOT_KEY" "${KEYDEV}" >/dev/null 2>&1; then
-      send_error "Reformatting ${KEYDEV}" ; return 1
+      send_error "Reformatting ${KEYDEV} to ${KEYFSTYPE}" ; return 1
     fi
   elif [[ "${KEYFORMAT}" =~ ^[2-4]$ ]]; then
-    send_prog "Reformating ${KEYDEV}"
-    if ! mkfs."${KEYFSTYPE}" -L "BOOT_KEY" "${KEYDEV}" >/dev/null 2>&1; then
-      send_error "Reformating ${KEYDEV}" ; return 1
+    send_prog "Reformating ${KEYDEV} to ${KEYFSTYPE}"
+    if ! mkfs."${KEYFSTYPE}" -L "BOOT_KEY" "${KEYFLAG}" "${KEYDEV}" >/dev/null 2>&1; then
+      send_error "Reformating ${KEYDEV} to ${KEYFSTYPE}" ; return 1
     fi
   else
     send_error "With key format variable  :  ${KEYFORMAT}"
@@ -336,7 +336,7 @@ function send_prog() {
 }
 
 function send_error() {
-  echo -e "${RED}***** ERROR  :  ${1} *****${END}"
+  echo -e "${RED}***** ERROR : ${1} *****${END}"
 }
 
 function term_message() {
@@ -714,10 +714,10 @@ Would you like to reformat to another filesystem?
     # Format Key based on selection
     if [[ "$KEYFORMAT" =~ ^[1-4]$ ]] ; then
       case "$KEYFORMAT" in
-        "1") export KEYFSTYPE="vfat" ;;
-        "2") export KEYFSTYPE="btrfs" ;;
-        "3") export KEYFSTYPE="ext4" ;;
-        "4") export KEYFSTYPE="xfs" ;;
+        "1") export KEYFSTYPE="vfat" ; export KEYFLAG= ;;
+        "2") export KEYFSTYPE="btrfs" ; export KEYFLAG="-f" ;;
+        "3") export KEYFSTYPE="ext4" ; export KEYFLAG="-F" ;;
+        "4") export KEYFSTYPE="xfs" ; export KEYFLAG="-f" ;;
         *) ;;
       esac
     fi
