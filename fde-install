@@ -55,27 +55,27 @@ ntfs-3g"
 
 # fde-blank
 export DEV=""
-export CRYPTNAME=""
-export VGNAME=""
-export LVROOTNAME=""
-export LVROOTSIZE=""
-export WANTSHOME=
-export LVHOMENAME=""
-export LVHOMESIZE=""
-export LVSWAPNAME=""
-export LVSWAPSIZE=""
-export EFISIZE=""
+export CRYPTNAME="arch-crypt"
+export VGNAME="system"
+export LVROOTNAME="root"
+export LVROOTSIZE="20G"
+export WANTSHOME=1
+export LVHOMENAME="home"
+export LVHOMESIZE="100"
+export LVSWAPNAME="swap"
+export LVSWAPSIZE="2G"
+export EFISIZE="1G"
 export TARGETMOUNTPOINT="/mnt/system"
-export NEWHOSTNAME=""
+export NEWHOSTNAME="arch"
 export ROOTPASS=
 export WANTSSDGRUB=
 export WANTKEY=
 export KEYDEV=""
 export KEYFORMAT=""
-export UKEYNAME=""
-export KEYNAME=""
+export UKEYNAME="arch-boot"
+export KEYNAME="arch-boot.key"
 export KEYMOUNT="/tmp/stick"
-export KEYDIR=""
+export KEYDIR="/keys"
 export KEYPATH=""
 export ERASEALL=
 export OVERWRITEINSTALL=
@@ -154,13 +154,18 @@ function encrypt_dev() {
   if ! pvcreate "/dev/mapper/${CRYPTNAME}" >/dev/null 2>&1; then return 1 ; fi
   send_prog "Creating volume group ${VGNAME}"
   if ! vgcreate "${VGNAME}" "/dev/mapper/${CRYPTNAME}" >/dev/null 2>&1; then return 1 ; fi
-  send_prog "Creating logical volume for root  :  ${LVROOTNAME}"
-  if ! lvcreate -n "${LVROOTNAME}" -L "${LVROOTSIZE}" "${VGNAME}" >/dev/null 2>&1; then return 1 ; fi
-  send_prog "Creating logical volume for swap  :  ${LVSWAPNAME}"
-  if ! lvcreate -n "${LVSWAPNAME}" -L "${LVSWAPSIZE}" "${VGNAME}" >/dev/null 2>&1; then return 1 ; fi
   if [[ "${WANTSHOME}" -eq 1 ]]; then
+    send_prog "Creating logical volume for root  :  ${LVROOTNAME}"
+    if ! lvcreate -n "${LVROOTNAME}" -L "${LVROOTSIZE}" "${VGNAME}" >/dev/null 2>&1; then return 1 ; fi
+    send_prog "Creating logical volume for swap  :  ${LVSWAPNAME}"
+    if ! lvcreate -n "${LVSWAPNAME}" -L "${LVSWAPSIZE}" "${VGNAME}" >/dev/null 2>&1; then return 1 ; fi
     send_prog "Creating logical volume for home  :  ${LVHOMENAME}"
     if ! lvcreate -n "${LVHOMENAME}" -l "${LVHOMESIZE}%FREE" "${VGNAME}" >/dev/null 2>&1; then return 1 ; fi
+  else
+    send_prog "Creating logical volume for root  :  ${LVROOTNAME}"
+    if ! lvcreate -n "${LVROOTNAME}" -l "${LVROOTSIZE}%FREE" "${VGNAME}" >/dev/null 2>&1; then return 1 ; fi
+    send_prog "Creating logical volume for swap  :  ${LVSWAPNAME}"
+    if ! lvcreate -n "${LVSWAPNAME}" -L "${LVSWAPSIZE}" "${VGNAME}" >/dev/null 2>&1; then return 1 ; fi
   fi
 }
 
@@ -377,7 +382,7 @@ function close_and_unmount() {
   cryptsetup close "${CRYPTNAME}"
 }
 
-usage() {
+function usage() {
   cat <<EOF
 Usage :  fde-install [options]
 
@@ -388,8 +393,8 @@ Options:
                     working directory. Any var not set or set improperly
                     will result in the user being queried for said var.
 
- --home             A logical volume for /home will be created during
-                    the installation process.
+ --no-home          A logical volume for /home will be not be created
+                    during the installation process.
 
  -h, --help         Show this help message and exit.
 EOF
@@ -400,7 +405,9 @@ while : ; do
   if [[ $# -ge 1 ]]; then
     case $1 in
       -h | --help) usage ; return 1 ; break ;;
-      --home) export WANTSHOME=1 ; shift ;;
+      --no-home)  export WANTSHOME=0
+                  export ROOTSIZE=100
+                  shift ;;
       -c) shift
           if [[ $# -ge 1 ]] && [[ "$1" != -* ]]; then
             FDECONFIG="$1"
@@ -459,16 +466,6 @@ This script will erase all the data on the install target${END}
   done
 
   if [[ "${ERASEALL}" -eq 0 ]]; then return 1 ; fi
-
-  # Setting some vars
-  if [ -d /sys/firmware/efi ]; then
-    export ISEFI=1
-    export EFIPARTITION=1
-    export CRYPTPARTITION=2
-  else
-    export ISEFI=0
-    export CRYPTPARTITION=1
-  fi
 
   # LUKS passphrase prompt
   while [[ -z "${PASSPHRASE}" ]]; do
@@ -585,15 +582,28 @@ Do not include spaces, special characters, or a minus"
     export LVROOTNAME
   done
 
-  # LVROOTSIZE prompt
-  while [[ -z "${LVROOTSIZE}" ]] || ! echo "${LVROOTSIZE}" | grep -E '^[0-9]+[G|T]$' | grep -q -v "${GREPTEST}\|-\|/" ; do
-    clear
-    echo -e "${GREEN}\
-Please specify the size of your root volume i.e. 10G${END}
-Must end with a \"${RED}G${END}\", or \"${RED}T${END}\""
-    read -rp "Root size: " LVROOTSIZE
-    export LVROOTSIZE
-  done
+  if [[ "${WANTSHOME}" -eq 1 ]]; then
+    # LVROOTSIZE prompt
+    while [[ -z "${LVROOTSIZE}" ]] || ! echo "${LVROOTSIZE}" | grep -E '^[0-9]+[G|T]$' | grep -q -v "${GREPTEST}\|-\|/" ; do
+      clear
+      echo -e "${GREEN}\
+  Please specify the size of your root volume i.e. 10G${END}
+  Must end with a \"${RED}G${END}\", or \"${RED}T${END}\""
+      read -rp "Root size: " LVROOTSIZE
+      export LVROOTSIZE
+    done
+  else
+    # LVROOTSIZE prompt
+    while [[ -z "${LVROOTSIZE}" ]] || ! echo "${LVROOTSIZE}" | grep -E '^100$|^[1-9][0-9]$|^[1-9]$' ; do
+      clear
+      echo -e "${GREEN}\
+Please specify the size of your root volume between 1 and 100${END}
+enter 100 to use 100% of the remaining storage on ${DEV}${CRYPTPARTITION}
+Do not include the \"${RED}%${END}\""
+      read -rp "Root size: " LVROOTSIZE
+      export LVROOTSIZE
+    done
+  fi
 
   # LVSWAPNAME prompt
   while [[ -z "${LVSWAPNAME}" ]] || echo "${LVSWAPNAME}" | grep -q "${GREPTEST}\|-\|/" -i ; do
@@ -1017,12 +1027,6 @@ https://github.com/johndovern/FDE-Arch"
     close_and_unmount
     return 1
   fi
-
-  # if ! configure_grub_and_hooks ; then
-  #   send_error "Failed to configure grub and mkinitcpo hooks"
-  #   close_and_unmount
-  #   return 1
-  # fi
 
   if ! chroot_config ; then
     send_error "Failed to chroot and install system"
