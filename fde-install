@@ -162,10 +162,10 @@ function encrypt_dev() {
     send_prog "Creating logical volume for home  :  ${LVHOMENAME}"
     if ! lvcreate -n "${LVHOMENAME}" -l "${LVHOMESIZE}%FREE" "${VGNAME}" >/dev/null 2>&1; then return 1 ; fi
   else
-    send_prog "Creating logical volume for root  :  ${LVROOTNAME}"
-    if ! lvcreate -n "${LVROOTNAME}" -l "${LVROOTSIZE}%FREE" "${VGNAME}" >/dev/null 2>&1; then return 1 ; fi
     send_prog "Creating logical volume for swap  :  ${LVSWAPNAME}"
     if ! lvcreate -n "${LVSWAPNAME}" -L "${LVSWAPSIZE}" "${VGNAME}" >/dev/null 2>&1; then return 1 ; fi
+    send_prog "Creating logical volume for root  :  ${LVROOTNAME}"
+    if ! lvcreate -n "${LVROOTNAME}" -l "${LVROOTSIZE}%FREE" "${VGNAME}" >/dev/null 2>&1; then return 1 ; fi
   fi
 }
 
