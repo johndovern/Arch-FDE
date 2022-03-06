@@ -82,6 +82,7 @@ export OVERWRITEINSTALL=
 export SYSCHANGE=
 export KEYCHANGE=
 export MULTILIB=
+export PASSPHRASE=
 # Do not touch these variables
 export GREPTEST=" \|\!\|@\|#\|%\|\^\|&\|*\|(\|)\|{\|}\|<\|>\|?\|;\|:\|'\||\|\"\|=\|+\|~\|\`"
 export FDECONFIG="fde-config"
