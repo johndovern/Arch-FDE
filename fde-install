@@ -5,21 +5,18 @@ export PACKAGELIST="base \
 linux \
 linux-firmware \
 linux-headers \
+linux-headers \
 neovim \
 git \
 curl \
-intel-ucode \
 lvm2 \
 grub \
 networkmanager \
 network-manager-applet \
 dialog \
 wpa_supplicant \
-mtools \
-dosfstools \
 reflector \
 base-devel \
-linux-headers \
 avahi \
 xdg-user-dirs \
 xdg-utils \
@@ -51,7 +48,18 @@ ipset \
 sof-firmware \
 nss-mdns \
 acpid \
-ntfs-3g"
+mtools \
+dosfstools \
+ntfs-3g \
+mesa \
+lib32-mesa \
+xf86-video-amdgpu \
+vulkan-radeon \
+lib32-vulkan-radeon \
+libva-mesa-driver\
+lib32-libva-mesa-driver\
+mesa-vdpau \
+lib32-mesa-vdpau"
 
 # fde-blank
 export DEV=""
@@ -81,7 +89,7 @@ export ERASEALL=
 export OVERWRITEINSTALL=
 export SYSCHANGE=
 export KEYCHANGE=
-export MULTILIB=
+export MULTILIB=1
 export PASSPHRASE=
 # Do not touch these variables
 export GREPTEST=" \|\!\|@\|#\|%\|\^\|&\|*\|(\|)\|{\|}\|<\|>\|?\|;\|:\|'\||\|\"\|=\|+\|~\|\`"
