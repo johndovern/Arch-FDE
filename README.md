@@ -22,6 +22,7 @@ prompts
 3. Choose target installation disk
 4. Choose to enable the multilib repo
 5. Choose to enable TRIM support if the target disk is an SSD
+
 All settings and brief explanations of them can be found in
 [fde-config.](https://github.com/johndovern/Arch-FDE/blob/master/fde-config)
 After the prompt phase users can review their settings. If they messed up or
